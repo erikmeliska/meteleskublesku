@@ -1,26 +1,62 @@
 html,
 body {
-  padding: 0;
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen,
-    Ubuntu, Cantarell, Fira Sans, Droid Sans, Helvetica Neue, sans-serif;
+    padding: 0;
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen,
+        Ubuntu, Cantarell, Fira Sans, Droid Sans, Helvetica Neue, sans-serif;
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
+.container {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	min-height: 100vh;
+	padding: 0 0.5rem;
+	background: #f0f0f0;
 }
 
-* {
-  box-sizing: border-box;
+.mainBlock {
+	display: flex;
+	flex-wrap: wrap;
+	flex-direction: row;
+	align-items: center;
+	justify-content: space-between;
+	background: #f0f0f0;
+	margin: 0 0 1em 0;
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
-  body {
-    color: white;
-    background: black;
-  }
+.images {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin: 0 -0.5rem;
+	gap: 1rem;
+}
+li {
+    list-style: none;
+}
+
+.audio li:hover, .audio li.active {
+	cursor: pointer;
+	background-color: #f35353;
+}
+
+.image {
+	margin: 1em;
+}
+
+.images img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+.images li {
+	border: transparent 3px solid;
+}
+
+.images li:hover, .images li.active {
+	cursor: pointer;
+	border: #f35353 3px solid;
 }
