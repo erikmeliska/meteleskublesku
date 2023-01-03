@@ -24,8 +24,6 @@ export default function Movie( { movie }) {
         loadAudio(audio);
     }, [audio]);
 
-    console.log(movie)
-
     return (
         <Container sx={{ mt: 2, mb: 10}}>
             <Grid container spacing={2}>
