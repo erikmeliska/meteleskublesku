@@ -3,16 +3,26 @@ import Image from "next/image";
 import { useRouter } from "next/router";
 import axios from 'axios';
 import { useState, useEffect } from 'react';
-import { Card, CardActionArea, CardContent, CardMedia, Container, Grid, Typography } from "@mui/material";
+import { Autocomplete, Card, CardActionArea, CardContent, CardMedia, Container, Grid, TextField, Typography } from "@mui/material";
 
 export default function Home({ movies }) {
 	const router = useRouter();
+	const [selected, setSelected] = useState(movies.map(item=>item.id));
 
     return (
 		<Container sx={{mb: 2}}>
 			<Typography variant="h4" sx={{my: 3, fontWeight: 100}}>Meteleskublesku <strong>reloaded</strong></Typography>
+			<Autocomplete
+				disablePortal
+				id="combo-box-demo"
+				noOptionsText="Žiadne výsledky"
+				onChange={(event,value) => setSelected(movies.filter(item=>value?.id==item.id||!value).map(item=>item.id))}
+				options={movies.map(item=> {return {label: item.title, id: +item.id}})}
+				sx={{ mb: 3  }}
+				renderInput={(params) => <TextField {...params} label="Vyber film" />}
+			/>
 			<Grid container spacing={2}>
-			{movies.map((movie) => (
+			{movies.filter(item=>selected.includes(item.id)).map((movie) => (
 				<Grid key={movie.id} item xs={12} sm={6} md={4} lg={3}>
 					<Card sx={{ maxWidth: 345 }}>
 						<CardActionArea onClick={() => router.push(`/movie/${movie.id}`)}>
