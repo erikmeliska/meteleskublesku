@@ -10,7 +10,7 @@ export default function Home({ movies }) {
 
     return (
 		<Container>
-			<h1>Meteleskublesku reloaded</h1>
+			<Typography variant="h4" sx={{my: 3, fontWeight: 100}}>Meteleskublesku <strong>reloaded</strong></Typography>
 			<Grid container spacing={2}>
 			{movies.map((movie) => (
 				<Grid key={movie.id} item xs={12} sm={6} md={4} lg={3}>

@@ -1,13 +1,17 @@
-import { BottomNavigation, Card, CardContent, CardMedia, Container, Drawer, Grid, ImageList, ImageListItem, List, ListItem, ListItemButton, Typography } from '@mui/material';
+import { BottomNavigation, Card, CardContent, CardMedia, Container, Drawer, Grid, ImageList, ImageListItem, Link as MUILink, List, ListItem, ListItemButton, Paper, Typography } from '@mui/material';
 import axios from 'axios';
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import AudioPlayer from 'react-h5-audio-player';
 import 'react-h5-audio-player/lib/styles.css';
+import { useRouter } from "next/router";
+import NextLink from 'next/link'
 
 export default function Movie( { movie }) {
     const [audio, setAudio] = useState(movie.audio[0].url);
     const [image, setImage] = useState((movie.images[0]?.url) ? movie.images[0].url : '');
+
+    const router = useRouter();
 
     const loadAudio = (url) => {
         const player = document.querySelector('audio');
@@ -26,6 +30,11 @@ export default function Movie( { movie }) {
 
     return (
         <Container sx={{ mt: 2, mb: 10}}>
+            <Paper elevation={0} sx={{ p: 0, my: 1, display: 'flex', flexDirection: 'column', alignItems: 'left', justifyContent: 'center' }}>
+                <NextLink passHref href="/" onClick={()=>router.push('/')}>
+                    <MUILink variant="body2">&lt; Späť na úvod</MUILink>
+                </NextLink>
+            </Paper>
             <Grid container spacing={2}>
                 <Grid item xs={12} sm={12} md={4} lg={4}>
                     <Card sx={{ maxWidth: 800}}>
