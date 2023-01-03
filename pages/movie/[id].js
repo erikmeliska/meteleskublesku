@@ -81,7 +81,7 @@ export default function Movie( { movie }) {
             >
                 <AudioPlayer
                     src={`${process.env.NEXT_PUBLIC_WEB_URL}/api/getAudio?path=${audio}`}
-                    autoPlay={false}
+                    autoPlay={true}
                     showJumpControls={false}
                     customAdditionalControls={[]}
                     // customVolumeControls={[]}
