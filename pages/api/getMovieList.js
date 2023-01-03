@@ -33,7 +33,6 @@ export default async function handler(req, res) {
         return {
             id: movie.querySelector('h2 a').getAttribute('href').replace('./?movie=', '').split('&')[0],
             title: movie.querySelector('h2').text.trim(),
-            cast: movie.querySelector('h2').nextSibling.text.trim(),
             image: img,
             desc: desc,
         }

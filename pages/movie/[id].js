@@ -1,4 +1,4 @@
-import { Container, ImageList, ImageListItem } from '@mui/material';
+import { BottomNavigation, Card, CardContent, CardMedia, Container, Drawer, Grid, ImageList, ImageListItem, List, ListItem, ListItemButton, Typography } from '@mui/material';
 import axios from 'axios';
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
@@ -20,36 +20,70 @@ export default function Movie( { movie }) {
         loadAudio(audio);
     }, [audio]);
 
+    console.log(movie)
+
     return (
-        <Container>
-            <h1>{movie.title}</h1>
-            <h2>{movie.director}</h2>
-            <h3>{movie.year}</h3>
-            <AudioPlayer
-                src={`${process.env.NEXT_PUBLIC_WEB_URL}/api/getAudio?path=${audio}`}
-                autoPlay={false}
-                showJumpControls={false}
-                customAdditionalControls={[]}
-                // customVolumeControls={[]}
-                layout="horizontal-reverse"
-            />
-            <div className="mainBlock">
-                <ul className="audio">
-                    {movie.audio.map((aud) => (
-                        <li key={aud.url} onClick={() => setAudio(aud.url)} className={(aud.url === audio) ? 'active':''}>{aud.text}</li>
-                    ))}
-                </ul>
-                <div className="image">
-                    <img src={`${process.env.NEXT_PUBLIC_WEB_URL}/api/getImage?path=${image}`} />
-                </div>
-            </div>
-            <ImageList sx={{ width: 500, height: 450 }} cols={3} rowHeight={164}>
-                {movie.images.map((img) => (
-                    <ImageListItem key={img.url} onClick={() => setImage(img.url)} className={(img.url === image) ? 'active':''}>
-                        <img width={150} height={100} src={`${process.env.NEXT_PUBLIC_WEB_URL}/api/getImage?path=${img.url}&w=164&h=164&fit=crop&auto=format`} />
-                    </ImageListItem>
-                ))}
-            </ImageList>
+        <Container sx={{ mt: 2, mb: 10}}>
+            <Grid container spacing={2}>
+                <Grid item xs={12} sm={12} md={4} lg={4}>
+                    <Card sx={{ maxWidth: 800}}>
+                        {image &&
+                            <CardMedia component="img" height="25%" image={`${process.env.NEXT_PUBLIC_WEB_URL}/api/getImage?path=${image}`} alt={movie.title} />
+                        }
+                        <CardContent>
+                            <Typography	gutterBottom variant="h5" component="div">
+                                {movie.title.split('(')[0]}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                Rok: {(movie.title.split('(')[1]) ? movie.title.split('(')[1].replace(')', '') : ''}
+                            </Typography>
+                            {movie.desc &&
+                                movie.desc.map((desc) => (
+                                <Typography key={desc} variant="body2" color="text.secondary"> 
+                                    {desc}
+                                </Typography>
+                            ))
+                            }
+                        </CardContent>
+                    </Card>
+                </Grid>
+                <Grid item xs={12} sm={6} md={3} lg={4}>
+                    <ImageList sx={{ maxWidth: 800, height: 500, my: 0 }} cols={3} rowHeight={120}>
+                        {movie.images.map((img) => (
+                            <ImageListItem key={img.url} onClick={() => setImage(img.url)} className={(img.url === image) ? 'active':''}>
+                                <img width={150} height={100} src={`${process.env.NEXT_PUBLIC_WEB_URL}/api/getImage?path=${img.url}&w=164&h=164&fit=crop&auto=format`} />
+                            </ImageListItem>
+                        ))}
+                    </ImageList>
+                </Grid>
+                <Grid item xs={12} sm={6} md={5} lg={4}>
+                    <Card sx={{ width: '100%', maxWidth: 450, bgcolor: 'background.paper' }}>
+                        <List dense>
+                            {movie.audio.map((aud) => (
+                                <ListItem disablePadding key={aud.url} onClick={() => setAudio(aud.url)}>
+                                    <ListItemButton selected={(aud.url === audio)}>
+                                        {aud.text}
+                                    </ListItemButton>
+                                </ListItem>
+                            ))}
+                        </List>
+                    </Card>
+                </Grid>
+            </Grid>
+
+            <Drawer
+                variant="permanent"
+                anchor="bottom"
+            >
+                <AudioPlayer
+                    src={`${process.env.NEXT_PUBLIC_WEB_URL}/api/getAudio?path=${audio}`}
+                    autoPlay={false}
+                    showJumpControls={false}
+                    customAdditionalControls={[]}
+                    // customVolumeControls={[]}
+                    layout="horizontal-reverse"
+                />
+            </Drawer>
         </Container>
     );
 }

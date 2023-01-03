@@ -29,14 +29,17 @@ export default async function handler(req, res) {
         return;
     }
     
-    movie.director = root.querySelector('h1').nextSibling.text.trim();
-    movie.year = root.querySelector('h1').nextElementSibling.text.trim();
+    const desc = root.querySelector('h1').nextSibling.parentNode.childNodes.filter((node, index)=>index > 1 && node.text.trim() != '').map((elm) => {
+        return elm.text.trim();
+    })
+
+    movie.desc = desc.filter((elm) => elm != '«Archív»');
 
     movie.audio = root.querySelectorAll('#soundlist tr').map((tr) => {
         return {
             text: tr.querySelector('td').nextElementSibling.text.trim(),
             url: tr.querySelector('td a').getAttribute('href'),
-            length: tr.querySelector('td a').text.trim(),
+            length: tr.querySelector('td a').text.trim()
         }
     });
 

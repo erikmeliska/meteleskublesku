@@ -17,7 +17,7 @@ export default function Home({ movies }) {
 					<Card sx={{ maxWidth: 345 }}>
 						<CardActionArea onClick={() => router.push(`/movie/${movie.id}`)}>
 						{movie.image &&
-							<CardMedia component="img" height="140" image={`${process.env.NEXT_PUBLIC_WEB_URL}/api/getImage?path=${movie.image}`} alt={movie.title} />
+							<CardMedia component="img" height="50%" image={`${process.env.NEXT_PUBLIC_WEB_URL}/api/getImage?path=${movie.image}`} alt={movie.title} />
 						}
 						<CardContent>
 							<Typography	gutterBottom variant="h5" component="div">
