@@ -13,7 +13,11 @@ export default function Movie( { movie }) {
         const player = document.querySelector('audio');
         player.src = `${process.env.NEXT_PUBLIC_WEB_URL}/api/getAudio?path=${url}`;
         player.load();
-        player.play();
+        try {
+            player.play();
+        } catch (error) {
+            console.log(error);
+        }
     }
 
     useEffect(() => {
