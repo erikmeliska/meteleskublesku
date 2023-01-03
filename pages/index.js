@@ -31,15 +31,15 @@ export default function Home({ movies }) {
 			))}
 			</Grid>
 			<Typography variant="body2" sx={{mt: 3, fontWeight: 100}}>
-				Meteleskublesku <strong>reloaded</strong> je webová aplikácia, pre všetkých fanúšikov českej klasiky, ktorá slúži na prehrávanie zvukových záznamov z knižnice <a href="http://meteleskublesku.cz/" target="_blank">meteleskublesku.cz</a>.<br />
+				Meteleskublesku <strong>reloaded</strong> je webová aplikácia, pre všetkých fanúšikov českej klasiky, ktorá slúži na prehrávanie zvukových záznamov z knižnice <a href="http://meteleskublesku.cz/">meteleskublesku.cz</a>.<br />
 			</Typography>
 			<Typography variant="body2" sx={{mt: 1, fontWeight: 100}}>
 				Pôvodný web nebol veľa rokov aktualizovaný a žiaľ obsahuje flash prehrávač, ktorý už nie je podporovaný.<br />
 				Tento web má za cieľ poskytnúť užívateľom rovnaký obsah ako pôvodný web, ale s moderným prehrávačom a responzívnou funkčnosťou aj pre mobily.<br />
 			</Typography>
 			<Typography variant="body2" sx={{mt: 1, fontWeight: 100}}>
-				Autorské práva na obsah webu rieši <a href="http://meteleskublesku.cz/?tab=info" target="_blank">meteleskublesku.cz</a>.<br />
-				Source code: <a href="">https://github.com/erikmeliska/meteleskublesku</a><br />
+				Autorské práva na obsah webu rieši <a href="http://meteleskublesku.cz/?tab=info">meteleskublesku.cz</a>.<br />
+				Source code: <a href="https://github.com/erikmeliska/meteleskublesku">GitHub</a><br />
 			</Typography>
 		</Container>
 	)
