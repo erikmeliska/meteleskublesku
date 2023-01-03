@@ -16,11 +16,13 @@
     "encoding": "^0.1.13",
     "eslint": "8.31.0",
     "eslint-config-next": "13.1.1",
+    "fluent-ffmpeg": "^2.1.2",
     "iconv-lite": "^0.6.3",
     "next": "13.1.1",
     "node-html-parser": "^6.1.4",
     "react": "18.2.0",
     "react-dom": "18.2.0",
-    "react-h5-audio-player": "^3.8.6"
+    "react-h5-audio-player": "^3.8.6",
+    "ytdl-core": "^4.11.2"
   }
 }
