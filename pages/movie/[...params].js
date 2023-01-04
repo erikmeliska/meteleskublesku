@@ -1,7 +1,7 @@
-import { BottomNavigation, Card, CardContent, CardMedia, Container, Drawer, Grid, ImageList, ImageListItem, Link as MUILink, List, ListItem, ListItemButton, Paper, Typography } from '@mui/material';
+import { BottomNavigation, Button, Card, CardContent, CardMedia, Container, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Drawer, Grid, ImageList, ImageListItem, Link as MUILink, List, ListItem, ListItemButton, Modal, Paper, Typography } from '@mui/material';
 import axios from 'axios';
 import Image from 'next/image';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import AudioPlayer from 'react-h5-audio-player';
 import 'react-h5-audio-player/lib/styles.css';
 import { useRouter } from "next/router";
@@ -10,20 +10,22 @@ import Link from 'next/link'
 export default function Movie( { movie, audioId, movieId }) {
     const [audio, setAudio] = useState((audioId) ? movie.audio[audioId - 1].url : movie.audio[0].url);
     const [image, setImage] = useState((movie.images[0]?.url) ? movie.images[0].url : '');
+    const [dialogOpen, setDialogOpen] = useState(false);
+    const player = useRef(null)
 
     const router = useRouter();
 
     const loadAudio = (url) => {
-        const player = document.querySelector('audio');
-        player.src = `${process.env.NEXT_PUBLIC_WEB_URL}/api/getAudio?path=${url}`;
-        player.load();
-        try {
-            player.play();
-        } catch (error) {
-            console.log(error);
-        }
+        player.current.src = `${process.env.NEXT_PUBLIC_WEB_URL}/api/getAudio?path=${url}`;
+        player.current.load();
+        handlePlay()
     }
 
+    const handlePlayDialog = () => {
+        setDialogOpen(false);
+        player.current.play();
+    }
+    
     const handleAudioChange = (index, url) => {
         router.push({
             pathname: router.pathname,
@@ -37,9 +39,30 @@ export default function Movie( { movie, audioId, movieId }) {
     }
 
     useEffect(() => {
-        loadAudio(audio);
+        if (player.current) {
+            loadAudio(audio);
+        }
     }, [audio]);
 
+    useEffect(() => {
+        player.current = document.querySelector('audio')
+        handlePlay()
+    }, []);
+
+    const handlePlay = () => {
+        if (player.current) {
+            const playPromise = player.current.play();
+            if (playPromise !== undefined) {
+                playPromise.then(_ => {
+                    setDialogOpen(false);
+                })
+                .catch(error => {
+                    setDialogOpen(true);
+                });
+            }
+        }
+    }
+    
     return (
         <Container sx={{ mt: 2, mb: 10}}>
             <Paper elevation={0} sx={{ p: 0, my: 1, display: 'flex', flexDirection: 'column', alignItems: 'left', justifyContent: 'center' }}>
@@ -105,6 +128,24 @@ export default function Movie( { movie, audioId, movieId }) {
                     layout="horizontal-reverse"
                 />
             </Drawer>
+
+            <Dialog
+                open={dialogOpen}
+                onClose={() => setDialogOpen(false)}
+                aria-labelledby="modal-modal-title"
+                aria-describedby="modal-modal-description"
+            >
+                <DialogTitle id="modal-modal-title">{movie.audio[audioId-1].text}</DialogTitle>
+                <DialogContent>
+                    <DialogContentText id="modal-modal-description">
+                        Prehrávanie ukážky začne až po kliknutí na tlačidlo
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handlePlayDialog}>Prehrať audio</Button>
+                </DialogActions>
+            </Dialog>
+
         </Container>
     );
 }
