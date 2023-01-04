@@ -23,6 +23,7 @@ const cacheDir = ".cache/temp";
 
 export default async function handler(req, res) {
     const { url, start, duration, id: audioId } = req.body;
+    console.log(url, start, duration, audioId);
 
     const videoId = url.split("v=")[1];
     const ampersandPosition = videoId.indexOf("&");
@@ -32,14 +33,15 @@ export default async function handler(req, res) {
     );
 
     const info = await ytdl.getBasicInfo(url);
-    const format = info.formats.find(item=>item.qualityLabel === "480p")
+    let format = info.formats.find(item=>item.qualityLabel === "480p")
+    if (!format) {
+        format = info.formats.find(item=>item.qualityLabel === "360p" && !item.audioQuality)
+    }
 
-    // if (info) {        
-    //     console.log(info.formats.length)
-    //     console.log(info.formats.find(item=>item.qualityLabel === "480p"))
-    //     res.status(200).json({ name: "Youtube machine", info: info });
-    //     return    
-    // }
+    if (info && !start && !duration) {
+        res.status(200).json({ info: info });
+        return    
+    }
 
     if (!fs.existsSync(`${cacheDir}/${id}`)) {
         fs.mkdirSync(`${cacheDir}/${id}`, { recursive: true });
@@ -74,37 +76,16 @@ export default async function handler(req, res) {
             .save(`${cacheDir}/${id}/audio-${audioId}.mp3`);
     }
 
-    // save images
-    if (fs.existsSync(`${cacheDir}/${id}/video.mp4`)) {
-        console.log("video exists");
+    let counter = 1
+    for (let i = 0; i <= duration; i += 2) {
+        spawn("ffmpeg", [
+            "-ss", timeToSeconds(start) + i,
+            "-i", `${cacheDir}/${id}/video.mp4`,
+            "-frames:v", "1",
+            "-q:v", "2",
+            `${cacheDir}/${id}/image-${audioId}-${counter++}.jpg`,
+        ]);
     }
-
-    // save image at start
-    spawn("ffmpeg", [
-        "-ss", start,
-        "-i", `${cacheDir}/${id}/video.mp4`,
-        "-frames:v", "1",
-        "-q:v", "2",
-        `${cacheDir}/${id}/image-${audioId}-1.jpg`,
-    ]);
-
-    // save image at middle
-    spawn("ffmpeg", [
-        "-ss", timeToSeconds(start) + duration / 2,
-        "-i", `${cacheDir}/${id}/video.mp4`,
-        "-frames:v", "1",
-        "-q:v", "2",
-        `${cacheDir}/${id}/image-${audioId}-2.jpg`,
-    ]);
-
-    // save image at end
-    spawn("ffmpeg", [
-        "-ss", timeToSeconds(start) + duration,
-        "-i", `${cacheDir}/${id}/video.mp4`,
-        "-frames:v", "1",
-        "-q:v", "2",
-        `${cacheDir}/${id}/image-${audioId}-3.jpg`,
-    ]);
 
     res.status(200).json({ name: "Youtube machine" });
 }
