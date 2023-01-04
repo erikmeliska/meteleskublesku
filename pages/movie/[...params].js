@@ -5,10 +5,10 @@ import { useState, useEffect } from 'react';
 import AudioPlayer from 'react-h5-audio-player';
 import 'react-h5-audio-player/lib/styles.css';
 import { useRouter } from "next/router";
-import NextLink from 'next/link'
+import Link from 'next/link'
 
-export default function Movie( { movie }) {
-    const [audio, setAudio] = useState(movie.audio[0].url);
+export default function Movie( { movie, audioId, movieId }) {
+    const [audio, setAudio] = useState((audioId) ? movie.audio[audioId - 1].url : movie.audio[0].url);
     const [image, setImage] = useState((movie.images[0]?.url) ? movie.images[0].url : '');
 
     const router = useRouter();
@@ -24,6 +24,18 @@ export default function Movie( { movie }) {
         }
     }
 
+    const handleAudioChange = (index, url) => {
+        router.push({
+            pathname: router.pathname,
+            query: {
+                params: [movieId, index + 1],
+            }
+            
+        }, undefined, { shallow: true });
+        
+        setAudio(url);
+    }
+
     useEffect(() => {
         loadAudio(audio);
     }, [audio]);
@@ -31,9 +43,7 @@ export default function Movie( { movie }) {
     return (
         <Container sx={{ mt: 2, mb: 10}}>
             <Paper elevation={0} sx={{ p: 0, my: 1, display: 'flex', flexDirection: 'column', alignItems: 'left', justifyContent: 'center' }}>
-                <NextLink passHref href="/" onClick={()=>router.push('/')}>
-                    <MUILink variant="body2">&lt; Späť na úvod</MUILink>
-                </NextLink>
+                <MUILink href="/" onClick={()=>router.push('/')} variant="body2">&lt; Späť na úvod</MUILink>
             </Paper>
             <Grid container spacing={2}>
                 <Grid item xs={12} sm={12} md={4} lg={4}>
@@ -70,8 +80,8 @@ export default function Movie( { movie }) {
                 <Grid item xs={12} sm={6} md={5} lg={4}>
                     <Card sx={{ width: '100%', maxWidth: 450, bgcolor: 'background.paper' }}>
                         <List dense>
-                            {movie.audio.map((aud) => (
-                                <ListItem disablePadding key={aud.url} onClick={() => setAudio(aud.url)}>
+                            {movie.audio.map((aud, index) => (
+                                <ListItem disablePadding key={aud.url} onClick={() => handleAudioChange(index, aud.url)}>
                                     <ListItemButton selected={(aud.url === audio)}>
                                         {aud.text}
                                     </ListItemButton>
@@ -100,11 +110,33 @@ export default function Movie( { movie }) {
 }
 
 export const getServerSideProps = async (ctx) => {
-    const { data } = await axios.get(`${process.env.NEXT_PUBLIC_WEB_URL}/api/getMovie?id=${ctx.params.id}`)
+    let [id, audio] = ctx.params.params || [1, 1]
+    let data
+
+    if (id != parseInt(id)) {
+        return {
+            notFound: true,
+        }
+    }
+
+    try {
+        const result = await axios.get(`${process.env.NEXT_PUBLIC_WEB_URL}/api/getMovie?id=${id}`)
+        data = result.data
+    } catch (e) {
+        return {
+            notFound: true,
+        }
+    }
+
+    if (data.movie.audio.length < audio || audio < 1 || audio != parseInt(audio)) {
+        audio = 1;
+    }
 
     return {
         props: {
-            movie: data.movie
+            movie: data.movie,
+            movieId: id,
+            audioId: audio
         }
     }
 }
