@@ -6,8 +6,11 @@ RUN apt-get install -y ffmpeg
 
 WORKDIR /var/app
 
-RUN yarn install
+# COPY . .
+# COPY /pages .
+# COPY /public .
+# COPY /*
 
-COPY . .
+RUN yarn install && yarn build
 
-CMD ["yarn", "run", "dev"]
+CMD ["yarn", "run", "start"]
