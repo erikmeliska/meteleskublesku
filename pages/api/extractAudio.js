@@ -21,6 +21,30 @@ const timeToSeconds = (time) => {
 // const url = "https://www.youtube.com/watch?v=Nyv1y2qmrKo";
 const cacheDir = ".cache/temp";
 
+/**
+ * Handles requests to extract audio and video segments from a YouTube video.
+ * It can also return basic video information if no specific segment is requested.
+ * Operations include downloading video and audio, caching them, extracting a specified audio segment,
+ * and generating thumbnail images from the video segment.
+ *
+ * @async
+ * @param {import('next').NextApiRequest} req - The Next.js API request object.
+ * @param {object} req.body - The request body.
+ * @param {string} req.body.url - The URL of the YouTube video.
+ * @param {string} [req.body.start] - The start time of the segment to extract (format: HH:MM:SS).
+ *                                    If not provided (along with duration), basic video info is returned.
+ * @param {string|number} [req.body.duration] - The duration of the segment to extract in seconds.
+ *                                             If not provided (along with start), basic video info is returned.
+ * @param {string} req.body.id - A unique identifier for the audio extract (e.g., 'audioId1_movie1').
+ *                               Used for naming cached files.
+ * @param {import('next').NextApiResponse} res - The Next.js API response object.
+ * @returns {Promise<void>} A promise that resolves when the response has been sent.
+ *                          Successful responses:
+ *                          - 200 with JSON `{ info: videoInfo }` if only URL is provided.
+ *                          - 200 with JSON `{ name: "Youtube machine" }` after successful extraction.
+ *                          Error responses are typically handled by Next.js default error handling (500)
+ *                          if operations like ytdl calls or file system writes fail unexpectedly.
+ */
 export default async function handler(req, res) {
     const { url, start, duration, id: audioId } = req.body;
     console.log(url, start, duration, audioId);
