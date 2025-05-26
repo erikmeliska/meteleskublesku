@@ -5,6 +5,27 @@ import fs from 'fs';
 
 const moviesFile = './.cache/movies.json';
 
+/**
+ * Handles requests for fetching the list of all movies.
+ * It first checks a local cache (`./.cache/movies.json`) for the movie list.
+ * If found, it serves the cached list.
+ * If not found, it fetches the main movie listing page from an external source
+ * (defined by `NEXT_PUBLIC_OLD_URL` with `?tab=movies` query),
+ * parses the HTML to extract the list of movies (id, title, image, description),
+ * caches this list as JSON, and then serves it.
+ *
+ * @async
+ * @param {import('next').NextApiRequest} req - The Next.js API request object. (No specific query or body parameters are expected for this endpoint).
+ * @param {import('next').NextApiResponse} res - The Next.js API response object.
+ * @returns {Promise<void>} A promise that resolves when the response has been sent.
+ *                          Successful responses:
+ *                          - 200 with JSON `{ movies: arrayOfMovieObjects }`. Each movie object contains
+ *                            `id`, `title`, `image` (URL), and `desc` (array of strings).
+ *                          Error responses:
+ *                          - Implicit 500 errors if operations (axios fetch, HTML parsing, file system writes) fail.
+ *                            The handler does not currently have explicit error handling for these cases beyond what
+ *                            the underlying libraries or Next.js provide.
+ */
 export default async function handler(req, res) {
     if (fs.existsSync(moviesFile)) {
         const movies = JSON.parse(fs.readFileSync(moviesFile, 'utf8'));
