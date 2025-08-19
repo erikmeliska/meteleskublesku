@@ -20,7 +20,7 @@
     "file-saver": "^2.0.5",
     "fluent-ffmpeg": "^2.1.2",
     "iconv-lite": "^0.6.3",
-    "next": "14.2.5",
+    "next": "^15.4.7",
     "nextjs-google-analytics": "^2.2.2",
     "node-html-parser": "^6.1.4",
     "react": "18.3.1",
