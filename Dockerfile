@@ -1,5 +1,5 @@
 # Install dependencies only when needed
-FROM node:16 AS deps
+FROM node:18 AS deps
 # RUN apk add --no-cache libc6-compat
 RUN apt-get -y update
 RUN apt-get -y upgrade
@@ -10,7 +10,7 @@ COPY package.json yarn.lock ./
 RUN yarn install --frozen-lockfile
 
 # Rebuild the source code only when needed
-FROM node:16 AS builder
+FROM node:18 AS builder
 
 WORKDIR /app
 
@@ -21,7 +21,7 @@ COPY . .
 RUN yarn build
 
 # Production image, copy all the files and run next
-FROM node:16 AS runner
+FROM node:18 AS runner
 WORKDIR /app
 
 ENV NODE_ENV production

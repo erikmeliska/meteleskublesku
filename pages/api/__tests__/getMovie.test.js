@@ -85,10 +85,10 @@ describe('/api/getMovie', () => {
     require('iconv-lite').decode.mockClear();
     const parseMock = require('node-html-parser').parse;
     parseMock.mockReset();
-    
+
     if (mockHtmlRoot.querySelector.mockClear) mockHtmlRoot.querySelector.mockClear();
     if (mockHtmlRoot.querySelectorAll.mockClear) mockHtmlRoot.querySelectorAll.mockClear();
-    
+
     process.env.NEXT_PUBLIC_OLD_URL = 'http://fake-old-url.com';
     require('node-html-parser').parse.mockReturnValue(mockHtmlRoot);
   });
@@ -170,8 +170,8 @@ describe('/api/getMovie', () => {
     fs.existsSync.mockReturnValue(false);
     const mockHtmlResponse = "<html><body>Content that gets parsed fine</body></html>";
     axios.get.mockResolvedValue({ data: Buffer.from(mockHtmlResponse) });
-    
-    require('node-html-parser').parse.mockReturnValue(mockHtmlRoot); 
+
+    require('node-html-parser').parse.mockReturnValue(mockHtmlRoot);
 
     fs.writeFileSync.mockImplementation(() => {
       throw new Error('Disk Full Error');

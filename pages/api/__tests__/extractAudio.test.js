@@ -25,12 +25,12 @@ describe('/api/extractAudio', () => {
     jest.clearAllMocks();
     ({ req: mockReq, res: mockRes } = createMocks({
       method: 'POST',
-      body: {}, 
+      body: {},
     }));
 
-    fs.existsSync.mockReturnValue(false); 
+    fs.existsSync.mockReturnValue(false);
     fs.mkdirSync.mockReturnValue(undefined);
-    
+
     const mockWriteStream = new PassThrough();
     // Emit 'finish' shortly after 'pipe' is called to simulate successful streaming.
     mockWriteStream.on('pipe', function() {
@@ -41,27 +41,27 @@ describe('/api/extractAudio', () => {
 
     ytdl.getBasicInfo.mockResolvedValue({
       formats: [
-        { qualityLabel: '480p', itag: '135' }, 
+        { qualityLabel: '480p', itag: '135' },
         { qualityLabel: '360p', itag: '18' },
       ],
     });
     const mockYtdlStream = new PassThrough();
     // Default mock for ytdl() (the download function)
-    ytdl.mockReturnValue(mockYtdlStream); 
+    ytdl.mockReturnValue(mockYtdlStream);
 
     const mockFfmpegInstance = {
       seekInput: jest.fn().mockReturnThis(),
       duration: jest.fn().mockReturnThis(),
       save: jest.fn().mockImplementation((outputPath) => {
-        return mockFfmpegInstance; 
+        return mockFfmpegInstance;
       }),
     };
     ffmpeg.mockReturnValue(mockFfmpegInstance);
 
     const mockSpawnProcess = {
-        on: jest.fn((event, cb) => { 
+        on: jest.fn((event, cb) => {
             if (event === 'exit' || event === 'close') {
-                setImmediate(() => cb(0)); 
+                setImmediate(() => cb(0));
             }
             return mockSpawnProcess;
         }),
@@ -96,14 +96,14 @@ describe('/api/extractAudio', () => {
     mockReq.body = {
       url: MOCK_URL,
       start: '00:00:10',
-      duration: '10', 
+      duration: '10',
       id: MOCK_AUDIO_ID,
     };
 
-    fs.existsSync.mockReturnValue(false); 
+    fs.existsSync.mockReturnValue(false);
 
     await handler(mockReq, mockRes);
-    
+
     await new Promise(resolve => setImmediate(resolve));
     await new Promise(resolve => setImmediate(resolve));
 
@@ -112,30 +112,30 @@ describe('/api/extractAudio', () => {
     expect(fs.mkdirSync).toHaveBeenCalledWith(`${CACHE_DIR}/${MOCK_VIDEO_ID}`, { recursive: true });
 
     // ytdl default export (for downloads) should be called twice
-    expect(ytdl).toHaveBeenCalledTimes(2); 
+    expect(ytdl).toHaveBeenCalledTimes(2);
     expect(ytdl).toHaveBeenCalledWith(MOCK_URL, { filter: 'videoonly', quality: '135' });
     expect(fs.createWriteStream).toHaveBeenCalledWith(`${CACHE_DIR}/${MOCK_VIDEO_ID}/video.mp4`);
-    
+
     expect(ytdl).toHaveBeenCalledWith(MOCK_URL, { filter: 'audioonly', quality: 'lowest' });
     expect(fs.createWriteStream).toHaveBeenCalledWith(`${CACHE_DIR}/${MOCK_VIDEO_ID}/audio.mp3`);
 
     expect(ffmpeg).toHaveBeenCalledWith(`${CACHE_DIR}/${MOCK_VIDEO_ID}/audio.mp3`);
-    const ffmpegInstance = ffmpeg.mock.results[0].value; 
+    const ffmpegInstance = ffmpeg.mock.results[0].value;
     expect(ffmpegInstance.seekInput).toHaveBeenCalledWith('00:00:10');
     expect(ffmpegInstance.duration).toHaveBeenCalledWith('10');
     expect(ffmpegInstance.save).toHaveBeenCalledWith(`${CACHE_DIR}/${MOCK_VIDEO_ID}/audio-${MOCK_AUDIO_ID}.mp3`);
 
-    expect(spawn).toHaveBeenCalledTimes(6); 
+    expect(spawn).toHaveBeenCalledTimes(6);
     for (let i = 0; i <= 10; i += 2) {
         expect(spawn).toHaveBeenCalledWith("ffmpeg", [
-            "-ss", 10 + i, 
+            "-ss", 10 + i,
             "-i", `${CACHE_DIR}/${MOCK_VIDEO_ID}/video.mp4`,
             "-frames:v", "1",
             "-q:v", "2",
             expect.stringContaining(`${CACHE_DIR}/${MOCK_VIDEO_ID}/image-${MOCK_AUDIO_ID}-`),
         ]);
     }
-    
+
     expect(mockRes._getStatusCode()).toBe(200);
     expect(JSON.parse(mockRes._getData())).toEqual({ name: "Youtube machine" });
   });
@@ -144,17 +144,17 @@ describe('/api/extractAudio', () => {
     mockReq.body = {
       url: MOCK_URL,
       start: '00:00:05',
-      duration: '4', 
+      duration: '4',
       id: MOCK_AUDIO_ID,
     };
 
     fs.existsSync.mockImplementation(path => {
       if (path === `${CACHE_DIR}/${MOCK_VIDEO_ID}/video.mp4`) return true;
       if (path === `${CACHE_DIR}/${MOCK_VIDEO_ID}/audio.mp3`) return true;
-      if (path === `${CACHE_DIR}/${MOCK_VIDEO_ID}`) return false; 
-      return false; 
+      if (path === `${CACHE_DIR}/${MOCK_VIDEO_ID}`) return false;
+      return false;
     });
-    
+
     await handler(mockReq, mockRes);
     await new Promise(resolve => setImmediate(resolve));
 
@@ -164,11 +164,11 @@ describe('/api/extractAudio', () => {
 
     expect(fs.mkdirSync).toHaveBeenCalledWith(`${CACHE_DIR}/${MOCK_VIDEO_ID}`, { recursive: true });
     expect(ffmpeg).toHaveBeenCalledWith(`${CACHE_DIR}/${MOCK_VIDEO_ID}/audio.mp3`);
-    
-    expect(spawn).toHaveBeenCalledTimes(3); 
+
+    expect(spawn).toHaveBeenCalledTimes(3);
      for (let i = 0; i <= 4; i += 2) {
         expect(spawn).toHaveBeenCalledWith("ffmpeg", [
-            "-ss", 5 + i, 
+            "-ss", 5 + i,
             "-i", `${CACHE_DIR}/${MOCK_VIDEO_ID}/video.mp4`,
             "-frames:v", "1",
             "-q:v", "2",
@@ -188,7 +188,7 @@ describe('/api/extractAudio', () => {
     await expect(handler(mockReq, mockRes)).rejects.toThrow(infoError);
 
     expect(ytdl.getBasicInfo).toHaveBeenCalledWith(MOCK_URL);
-    expect(mockRes._isEndCalled()).toBe(false); 
+    expect(mockRes._isEndCalled()).toBe(false);
   });
 
 });

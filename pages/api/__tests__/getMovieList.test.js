@@ -41,7 +41,7 @@ describe('/api/getMovieList', () => {
     fs.existsSync.mockReset();
     fs.readFileSync.mockReset();
     fs.writeFileSync.mockReset();
-    
+
     // Clear mocks for iconv-lite and node-html-parser
     require('iconv-lite').decode.mockClear();
     const parseMock = require('node-html-parser').parse;
@@ -49,7 +49,7 @@ describe('/api/getMovieList', () => {
     if (parseMock().querySelectorAll) {
         parseMock().querySelectorAll.mockClear();
     }
-    
+
     process.env.NEXT_PUBLIC_OLD_URL = 'http://fake-old-url.com';
 
     const mockRoot = {
@@ -125,10 +125,10 @@ describe('/api/getMovieList', () => {
 
   test('Test 4 (Cache Read Error, then API Success): handler should crash on read error', async () => {
     const { req, res } = createMocks({ method: 'GET' });
-    
+
     fs.existsSync.mockReturnValue(true);
     fs.readFileSync.mockImplementation(() => { throw new Error('Cache Read Error'); });
-    
+
     const mockHtmlDataString = "<html><body>Mock HTML for recovery</body></html>";
     axios.get.mockResolvedValue({ data: Buffer.from(mockHtmlDataString) });
 

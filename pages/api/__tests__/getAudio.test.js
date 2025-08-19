@@ -43,9 +43,9 @@ describe('/api/getAudio', () => {
   test('Test 2 (Cache Miss - Successful Fetch & Cache - with dir): should fetch, create dir, cache, and return audio', async () => {
     const { req, res } = createMocks({ method: 'GET', query: { path: audioPath } });
     fs.existsSync.mockImplementation(p => {
-        if (p === cacheFilePath) return false; 
-        if (p === cacheDir) return false; 
-        return true; 
+        if (p === cacheFilePath) return false;
+        if (p === cacheDir) return false;
+        return true;
     });
 
     let actualResolveAxios;
@@ -63,11 +63,11 @@ describe('/api/getAudio', () => {
     expect(res._getHeaders()['content-type']).toBe('audio/mpeg'); // Changed Content-Type
     expect(getResponseBuffer(res)).toEqual(mockAudioContent);
   });
-  
+
   test('Test 2.1 (Cache Miss - Successful Fetch & Cache - no dir): should fetch, cache (no mkdir), and return audio', async () => {
     const { req, res } = createMocks({ method: 'GET', query: { path: audioPathSimple } });
     const simpleCacheFilePath = `./.cache/${audioPathSimple}`;
-    fs.existsSync.mockImplementation(p => p !== simpleCacheFilePath); 
+    fs.existsSync.mockImplementation(p => p !== simpleCacheFilePath);
 
     let actualResolveAxios;
     const axiosGetPromise = new Promise(resolve => { actualResolveAxios = resolve; });
@@ -93,9 +93,9 @@ describe('/api/getAudio', () => {
     let actualRejectAxios;
     const axiosGetPromise = new Promise((resolve, reject) => { actualRejectAxios = reject; });
     axios.get.mockReturnValue(axiosGetPromise);
-    
+
     handler(req, res);
-    actualRejectAxios({ response: { status: 404 } }); 
+    actualRejectAxios({ response: { status: 404 } });
     await axiosGetPromise.then(() => {}).catch(async () => { await new Promise(setImmediate); });
 
     expect(axios.get).toHaveBeenCalledWith(expectedApiUrl(audioPath), { responseType: 'arraybuffer' });
@@ -108,7 +108,7 @@ describe('/api/getAudio', () => {
     const { req, res } = createMocks({ method: 'GET', query: { path: audioPath } });
     fs.existsSync.mockImplementation(p => {
         if (p === cacheFilePath) return false;
-        if (p === cacheDir) return false; 
+        if (p === cacheDir) return false;
         return false;
     });
     const mkdirError = new Error('EACCES: permission denied');
@@ -117,16 +117,16 @@ describe('/api/getAudio', () => {
     let actualResolveAxios;
     const axiosGetPromise = new Promise(resolve => { actualResolveAxios = resolve; });
     axios.get.mockReturnValue(axiosGetPromise);
-    
+
     handler(req, res);
     actualResolveAxios({ data: mockAudioContent });
-    
-    await axiosGetPromise.then(async () => { 
-        await new Promise(setImmediate); 
-    }).catch(async (err) => { 
+
+    await axiosGetPromise.then(async () => {
+        await new Promise(setImmediate);
+    }).catch(async (err) => {
         await new Promise(setImmediate);
     });
-    
+
     expect(fs.mkdirSync).toHaveBeenCalledWith(cacheDir, { recursive: true });
     expect(fs.writeFileSync).not.toHaveBeenCalled();
     expect(res._getStatusCode()).toBe(404);
@@ -136,8 +136,8 @@ describe('/api/getAudio', () => {
   test('Test 5 (File System Error - writeFileSync fails): should return 404 with "Audio not found" (current behavior)', async () => {
     const { req, res } = createMocks({ method: 'GET', query: { path: audioPath } });
     fs.existsSync.mockImplementation(p => {
-        if (p === cacheFilePath) return false; 
-        if (p === cacheDir) return true;    
+        if (p === cacheFilePath) return false;
+        if (p === cacheDir) return true;
         return true;
     });
     const writeError = new Error('ENOSPC: no space left on device');
