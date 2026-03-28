@@ -1,10 +1,3 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-.dccache
-/.cache/media
-/.cache/temp
-/.cache/*.json
-.env
-
 # dependencies
 /node_modules
 /.pnp
@@ -20,9 +13,21 @@
 # production
 /build
 
+# cache
+/.cache/
+
+# database
+/data/*.db
+/data/*.db-journal
+/data/*.db-wal
+
+# prisma generated
+/src/generated/
+
 # misc
 .DS_Store
 *.pem
+.dccache
 
 # debug
 npm-debug.log*
@@ -30,8 +35,20 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# local env files
+# env files
+.env
 .env*.local
+.env*.production
+
+# playwright mcp
+.playwright-mcp/
+
+# screenshots
+*.png
+
+# docs (generated)
+DOCUMENTATION.md
+PLAN.md
 
 # vercel
 .vercel
