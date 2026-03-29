@@ -44,7 +44,7 @@ ssh "$HOST" << 'ENDSSH'
 
   echo "==> Deployed! Checking health..."
   sleep 5
-  curl -sf http://localhost:3000 > /dev/null && echo "==> Health check OK!" || echo "==> Warning: health check failed"
+  curl -sf https://meteleskublesku.ixy.sk > /dev/null && echo "==> Health check OK!" || echo "==> Warning: health check failed"
 ENDSSH
 
 echo "==> Deployment complete!"
