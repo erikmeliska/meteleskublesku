@@ -38,11 +38,12 @@ export async function getUserCookiesPath(): Promise<string | null> {
  * Prepends --cookies flag if user has cookies configured.
  */
 export async function withCookies(args: string[]): Promise<string[]> {
+  const base = ["--js-runtimes", "node"];
   const cookiePath = await getUserCookiesPath();
   if (cookiePath) {
-    return ["--cookies", cookiePath, ...args];
+    return [...base, "--cookies", cookiePath, ...args];
   }
-  return args;
+  return [...base, ...args];
 }
 
 /**
