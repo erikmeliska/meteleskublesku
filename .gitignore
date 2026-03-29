@@ -46,9 +46,8 @@ yarn-error.log*
 # screenshots
 *.png
 
-# docs (generated)
-DOCUMENTATION.md
-PLAN.md
+# docs
+# PLAN.md
 
 # vercel
 .vercel
