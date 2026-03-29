@@ -25,7 +25,7 @@ echo "==> Deploying to $HOST..."
 
 # Push current branch to remote
 echo "==> Pushing to git remote..."
-git push origin feature/modernization
+git push origin main
 
 # Deploy on VPS
 echo "==> Deploying on VPS..."
@@ -39,8 +39,8 @@ ssh "$HOST" << 'ENDSSH'
   fi
   cd "$APP_DIR"
   git fetch origin
-  git checkout feature/modernization
-  git pull origin feature/modernization
+  git checkout main
+  git pull origin main
 
   # Build and deploy
   docker compose down
