@@ -84,15 +84,7 @@ export function SiteFooter() {
             >
               meteleskublesku.cz
             </a>
-            {" "}&middot; Frontend &copy; {new Date().getFullYear()}{" "}
-            <a
-              href="https://github.com/erikmeliska"
-              className="hover:text-foreground transition-colors"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Erik Meliska
-            </a>
+            {" "}&middot; {new Date().getFullYear()}
           </p>
         </div>
       </div>
