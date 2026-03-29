@@ -5,21 +5,12 @@
 # Prerequisites on VPS:
 #   - Docker & Docker Compose installed
 #   - Git installed
-#   - .env.production file configured
+#   - .env.production file configured in APP_DIR
 
 set -e
 
-HOST="${1:-}"
-
-if [ -z "$HOST" ]; then
-  echo "Usage: ./deploy.sh user@host"
-  echo ""
-  echo "This script deploys the app to your VPS via SSH."
-  echo "Make sure .env.production is configured on the VPS."
-  exit 1
-fi
-
-APP_DIR="/opt/meteleskublesku"
+HOST="${1:-ericsko@webs.ixy.sk}"
+APP_DIR="~/docker/meteleskublesku"
 
 echo "==> Deploying to $HOST..."
 
@@ -31,16 +22,20 @@ git push origin main
 echo "==> Deploying on VPS..."
 ssh "$HOST" << 'ENDSSH'
   set -e
-  APP_DIR="/opt/meteleskublesku"
+  APP_DIR=~/docker/meteleskublesku
 
   # Clone or pull
   if [ ! -d "$APP_DIR" ]; then
-    git clone https://github.com/erikmeliska/meteleskublesku.git "$APP_DIR"
+    git clone git@github.com:erikmeliska/meteleskublesku.git "$APP_DIR"
   fi
   cd "$APP_DIR"
   git fetch origin
   git checkout main
   git pull origin main
+
+  # Ensure data and cache dirs exist with correct ownership (uid 1001 = nextjs in container)
+  mkdir -p data cache
+  sudo chown -R 1001:1001 data cache
 
   # Build and deploy
   docker compose down
@@ -49,7 +44,7 @@ ssh "$HOST" << 'ENDSSH'
 
   echo "==> Deployed! Checking health..."
   sleep 5
-  curl -sf http://localhost:3700 > /dev/null && echo "==> Health check OK!" || echo "==> Warning: health check failed"
+  curl -sf http://localhost:3000 > /dev/null && echo "==> Health check OK!" || echo "==> Warning: health check failed"
 ENDSSH
 
 echo "==> Deployment complete!"
