@@ -1,21 +1,27 @@
 "use client";
 
-import { Moon, Sun } from "lucide-react";
+import { Moon, Sun, Monitor } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 
+const themes = ["system", "light", "dark"] as const;
+const icons = { system: Monitor, light: Sun, dark: Moon };
+const labels = { system: "Systémová téma", light: "Svetlá téma", dark: "Tmavá téma" };
+
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme();
+  const current = (theme as keyof typeof icons) || "system";
+  const Icon = icons[current];
+
+  function cycleTheme() {
+    const idx = themes.indexOf(current);
+    setTheme(themes[(idx + 1) % themes.length]);
+  }
 
   return (
-    <Button
-      variant="ghost"
-      size="icon"
-      onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-    >
-      <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-      <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-      <span className="sr-only">Prepnúť tému</span>
+    <Button variant="ghost" size="icon" onClick={cycleTheme} title={labels[current]}>
+      <Icon className="h-5 w-5" />
+      <span className="sr-only">{labels[current]}</span>
     </Button>
   );
 }
