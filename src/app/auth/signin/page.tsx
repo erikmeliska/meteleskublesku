@@ -4,11 +4,10 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Film, Mail, Lock, Github, Loader2, Eye, EyeOff } from "lucide-react";
+import { Film, Mail, Lock, Loader2, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 
 export default function SignInPage() {
   const router = useRouter();
@@ -17,7 +16,6 @@ export default function SignInPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [githubLoading, setGithubLoading] = useState(false);
 
   const handleCredentials = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,11 +39,6 @@ export default function SignInPage() {
       setError("Nastala chyba pri prihlasovaní");
     }
     setLoading(false);
-  };
-
-  const handleGithub = () => {
-    setGithubLoading(true);
-    signIn("github", { callbackUrl: "/dashboard" });
   };
 
   return (
@@ -153,31 +146,6 @@ export default function SignInPage() {
               )}
             </Button>
           </form>
-
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <Separator className="w-full" />
-            </div>
-            <div className="relative flex justify-center">
-              <span className="bg-background px-3 text-xs text-muted-foreground uppercase tracking-wider">
-                alebo
-              </span>
-            </div>
-          </div>
-
-          <Button
-            variant="outline"
-            className="w-full h-11"
-            onClick={handleGithub}
-            disabled={githubLoading}
-          >
-            {githubLoading ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Github className="h-4 w-4 mr-2" />
-            )}
-            Pokračovať s GitHub
-          </Button>
 
           <p className="text-center text-sm text-muted-foreground">
             Nemáte účet?{" "}
