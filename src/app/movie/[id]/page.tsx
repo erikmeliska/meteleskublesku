@@ -65,7 +65,6 @@ export async function generateMetadata({ params }: MoviePageProps): Promise<Meta
     const clips = await getCachedClips(movieId);
     const clip = clips.find((c) => c.id === fullClipId);
     if (clip) {
-      ogTitle = `${clip.quoteText || clip.name} | ${movie.title}`;
       ogDescription = clip.quoteText || clip.name;
       ogImage = resolveImageUrl(clip.imageMiddle) || moviePoster;
     }
