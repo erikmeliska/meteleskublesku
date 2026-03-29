@@ -16,6 +16,24 @@ Key features:
 - **Legacy scraper** -- Import content from the original meteleskublesku.cz website
 - **Admin tools** -- Import legacy data, batch update images and durations
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/homepage-light-desktop.png" alt="Homepage — light mode" width="720" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/homepage-dark-desktop.png" alt="Homepage — dark mode" width="720" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/movie-light-desktop.png" alt="Movie detail — light mode" width="720" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/hlasky-dark-desktop.png" alt="AI extraction wizard — dark mode" width="720" />
+</p>
+
 ## Tech Stack
 
 | Layer | Technology |
