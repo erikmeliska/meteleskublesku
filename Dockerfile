@@ -2,7 +2,7 @@
 FROM node:24-slim AS base
 RUN apt-get update && \
     apt-get install -y --no-install-recommends ffmpeg curl ca-certificates python3 python3-pip python3-venv && \
-    python3 -m pip install --break-system-packages yt-dlp && \
+    python3 -m pip install --break-system-packages 'yt-dlp[default]' && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # ---- Dependencies ----
