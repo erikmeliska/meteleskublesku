@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { getMovie } from "@/lib/scraper";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -74,5 +75,10 @@ export async function PATCH(
       ...(thumbnail !== undefined && { thumbnail }),
     },
   });
+
+  // Invalidate caches after movie update
+  revalidateTag("movies", "max");
+  revalidateTag(`movie-${id}`, "max");
+
   return NextResponse.json({ movie: updated });
 }

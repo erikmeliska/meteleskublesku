@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getMovieList, getMovie } from "@/lib/scraper";
@@ -128,6 +129,10 @@ export async function POST() {
         errors.push(`${item.id}: ${String(err)}`);
       }
     }
+
+    // Invalidate all caches after bulk import
+    revalidateTag("movies", "max");
+    revalidateTag("clips", "max");
 
     return NextResponse.json({
       success: true,

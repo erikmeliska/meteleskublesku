@@ -1,5 +1,4 @@
-export const dynamic = "force-dynamic";
-
+import { unstable_cache } from "next/cache";
 import { MovieSearch } from "@/components/movie-search";
 import { Film } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -7,27 +6,35 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import type { MovieListItem } from "@/types/movie";
 
+const getCachedMoviesAndClips = unstable_cache(
+  async () => {
+    const allDbMovies = await prisma.userMovie.findMany({
+      orderBy: { title: "asc" },
+      select: {
+        id: true,
+        userId: true,
+        title: true,
+        year: true,
+        thumbnail: true,
+        posterUrl: true,
+      },
+    });
+
+    const allClips = await prisma.userClip.findMany({
+      where: { movieId: { in: allDbMovies.map((m) => m.id) } },
+      select: { id: true, movieId: true, quoteText: true },
+    });
+
+    return { allDbMovies, allClips };
+  },
+  ["homepage-movies"],
+  { tags: ["movies", "clips"] }
+);
+
 export default async function HomePage() {
   const session = await auth();
 
-  // All movies from DB
-  const allDbMovies = await prisma.userMovie.findMany({
-    orderBy: { title: "asc" },
-    select: {
-      id: true,
-      userId: true,
-      title: true,
-      year: true,
-      thumbnail: true,
-      posterUrl: true,
-    },
-  });
-
-  // Fetch audio track names for search
-  const allClips = await prisma.userClip.findMany({
-    where: { movieId: { in: allDbMovies.map((m) => m.id) } },
-    select: { id: true, movieId: true, quoteText: true },
-  });
+  const { allDbMovies, allClips } = await getCachedMoviesAndClips();
 
   const tracksByMovie = new Map<string, { id: string; text: string }[]>();
   for (const clip of allClips) {

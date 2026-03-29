@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
@@ -132,6 +133,14 @@ export async function POST(request: NextRequest) {
       })
     );
 
+    // Invalidate caches after saving clips
+    revalidateTag("clips", "max");
+    revalidateTag("movies", "max");
+    const affectedMovieIds = new Set(movieIdMap.values());
+    for (const mid of affectedMovieIds) {
+      revalidateTag(`movie-${mid}`, "max");
+    }
+
     return NextResponse.json({
       savedClips,
       count: savedClips.length,
@@ -173,5 +182,12 @@ export async function DELETE(request: NextRequest) {
   }
 
   await prisma.userClip.delete({ where: { id: clipId } });
+
+  // Invalidate caches after deleting clip
+  revalidateTag("clips", "max");
+  if (clip.movieId) {
+    revalidateTag(`movie-${clip.movieId}`, "max");
+  }
+
   return NextResponse.json({ success: true });
 }

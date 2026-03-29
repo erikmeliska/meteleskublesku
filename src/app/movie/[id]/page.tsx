@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { unstable_cache } from "next/cache";
 import { ArrowLeft, Calendar, Youtube } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -14,9 +15,29 @@ interface MoviePageProps {
   searchParams: Promise<{ audio?: string }>;
 }
 
+function getCachedMovie(movieId: string) {
+  return unstable_cache(
+    async () => prisma.userMovie.findUnique({ where: { id: movieId } }),
+    [`movie-${movieId}`],
+    { tags: ["movies", `movie-${movieId}`] }
+  )();
+}
+
+function getCachedClips(movieId: string) {
+  return unstable_cache(
+    async () =>
+      prisma.userClip.findMany({
+        where: { movieId },
+        orderBy: { createdAt: "asc" },
+      }),
+    [`clips-${movieId}`],
+    { tags: ["clips", `movie-${movieId}`] }
+  )();
+}
+
 export async function generateMetadata({ params }: MoviePageProps): Promise<Metadata> {
   const { id } = await params;
-  const movie = await prisma.userMovie.findUnique({ where: { id: `mov_${id}` } });
+  const movie = await getCachedMovie(`mov_${id}`);
   if (!movie) return { title: "Film nenájdený" };
 
   return {
@@ -37,15 +58,12 @@ export default async function MoviePage({ params, searchParams }: MoviePageProps
   const movieId = `mov_${id}`;
 
   const [movie, session] = await Promise.all([
-    prisma.userMovie.findUnique({ where: { id: movieId } }),
+    getCachedMovie(movieId),
     auth(),
   ]);
   if (!movie) notFound();
 
-  const clips = await prisma.userClip.findMany({
-    where: { movieId },
-    orderBy: { createdAt: "asc" },
-  });
+  const clips = await getCachedClips(movieId);
 
   // Determine edit permissions: owner or admin
   const isOwner = session?.user?.id === movie.userId;

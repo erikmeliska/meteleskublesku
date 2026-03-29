@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getMovie } from "@/lib/scraper";
@@ -47,6 +48,11 @@ export async function POST() {
     } catch (err) {
       errors.push(`${movie.id}: ${String(err)}`);
     }
+  }
+
+  // Invalidate movie caches after image updates
+  if (updated > 0) {
+    revalidateTag("movies", "max");
   }
 
   return NextResponse.json({ updated, errors: errors.slice(0, 10), totalErrors: errors.length });
