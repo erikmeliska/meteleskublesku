@@ -35,18 +35,50 @@ function getCachedClips(movieId: string) {
   )();
 }
 
+function resolveImageUrl(src: string | null | undefined): string | undefined {
+  if (!src) return undefined;
+  if (src.startsWith("http")) return src;
+  // Relative paths need the full URL for OG images
+  const base = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : "https://meteleskublesku.ixy.sk";
+  return `${base}/api/media/image?path=${encodeURIComponent(src)}`;
+}
+
 export async function generateMetadata({ params }: MoviePageProps): Promise<Metadata> {
-  const { id } = await params;
-  const movie = await getCachedMovie(`mov_${id}`);
+  const { id, clipId } = await params;
+  const movieId = `mov_${id}`;
+  const movie = await getCachedMovie(movieId);
   if (!movie) return { title: "Film nenájdený" };
 
+  const movieTitle = `${movie.title}${movie.year ? ` (${movie.year})` : ""}`;
+  const moviePoster = resolveImageUrl(movie.posterUrl || movie.thumbnail);
+
+  // Default: movie-level OG
+  let ogTitle = `${movie.title} | Meteleskublesku`;
+  let ogDescription = movie.plot?.slice(0, 160) || undefined;
+  let ogImage = moviePoster;
+
+  // If a specific clip is selected, use clip data for OG
+  if (clipId) {
+    const fullClipId = `clip_${clipId}`;
+    const clips = await getCachedClips(movieId);
+    const clip = clips.find((c) => c.id === fullClipId);
+    if (clip) {
+      ogTitle = `${clip.quoteText || clip.name} | ${movie.title}`;
+      ogDescription = clip.quoteText || clip.name;
+      ogImage = resolveImageUrl(clip.imageMiddle) || moviePoster;
+    }
+  }
+
   return {
-    title: `${movie.title}${movie.year ? ` (${movie.year})` : ""}`,
-    description: movie.plot?.slice(0, 160) || undefined,
+    title: movieTitle,
+    description: ogDescription,
     openGraph: {
-      title: `${movie.title} | Meteleskublesku`,
-      description: movie.plot?.slice(0, 160) || undefined,
+      title: ogTitle,
+      description: ogDescription,
       type: "music.album",
+      ...(ogImage ? { images: [{ url: ogImage }] } : {}),
     },
   };
 }
