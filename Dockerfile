@@ -11,7 +11,7 @@ RUN apt-get update && \
 FROM base AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm install --frozen-lockfile || npm install
 
 # ---- Builder ----
 FROM base AS builder
