@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
+import Link from "next/link";
 import { Search, X, Film, Volume2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -12,13 +13,28 @@ interface MovieSearchProps {
   movies: MovieListItem[];
 }
 
+interface MatchedTrack {
+  id: string;
+  text: string;
+  movieId: string;
+}
+
 interface SearchResult {
   movie: MovieListItem;
-  matchedTracks: string[];
+  matchedTracks: MatchedTrack[];
+}
+
+function stripPrefix(id: string, prefix: string) {
+  return id.startsWith(prefix) ? id.slice(prefix.length) : id;
 }
 
 export function MovieSearch({ movies }: MovieSearchProps) {
   const [query, setQuery] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    searchRef.current?.focus();
+  }, []);
 
   const results = useMemo((): SearchResult[] => {
     if (!query.trim()) {
@@ -28,9 +44,9 @@ export function MovieSearch({ movies }: MovieSearchProps) {
     return movies
       .map((movie) => {
         const titleMatch = movie.title.toLowerCase().includes(q);
-        const matchedTracks = (movie.audioTracks || []).filter((track) =>
-          track.toLowerCase().includes(q)
-        );
+        const matchedTracks = (movie.audioTracks || [])
+          .filter((track) => track.text.toLowerCase().includes(q))
+          .map((track) => ({ ...track, movieId: movie.id }));
         if (titleMatch || matchedTracks.length > 0) {
           return { movie, matchedTracks };
         }
@@ -46,6 +62,7 @@ export function MovieSearch({ movies }: MovieSearchProps) {
         <div className="relative group">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground transition-colors group-focus-within:text-primary" />
           <Input
+            ref={searchRef}
             placeholder="Hľadať film alebo hlášku..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -97,17 +114,18 @@ export function MovieSearch({ movies }: MovieSearchProps) {
           {results.map(({ movie, matchedTracks }, index) => (
             <div key={movie.id}>
               <MovieCard movie={movie} index={index} />
-              {/* Show matched audio tracks under the card */}
+              {/* Show matched audio tracks under the card - clickable to clip */}
               {matchedTracks.length > 0 && (
                 <div className="mt-1.5 px-1 space-y-0.5 animate-fade-in">
-                  {matchedTracks.slice(0, 3).map((track, i) => (
-                    <div
-                      key={i}
-                      className="flex items-start gap-1.5 text-[11px] text-muted-foreground leading-tight"
+                  {matchedTracks.slice(0, 3).map((track) => (
+                    <Link
+                      key={track.id}
+                      href={`/movie/${stripPrefix(track.movieId, "mov_")}/clip/${stripPrefix(track.id, "clip_")}`}
+                      className="flex items-start gap-1.5 text-[11px] text-muted-foreground leading-tight hover:text-primary transition-colors"
                     >
                       <Volume2 className="h-3 w-3 text-primary/60 shrink-0 mt-0.5" />
-                      <span className="line-clamp-1">{track}</span>
-                    </div>
+                      <span className="line-clamp-1">{track.text}</span>
+                    </Link>
                   ))}
                   {matchedTracks.length > 3 && (
                     <p className="text-[10px] text-muted-foreground/60 pl-[18px]">

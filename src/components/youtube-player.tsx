@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useCallback, useState } from "react";
+import { useRef, useEffect, useCallback, useState, forwardRef, useImperativeHandle } from "react";
 
 // YouTube IFrame API types
 declare global {
@@ -37,6 +37,12 @@ interface YTPlayer {
   getDuration: () => number;
   getPlayerState: () => number;
   destroy: () => void;
+}
+
+export interface YouTubePlayerHandle {
+  seekTo: (seconds: number) => void;
+  play: () => void;
+  pause: () => void;
 }
 
 interface YouTubePlayerProps {
@@ -77,123 +83,144 @@ function loadYouTubeAPI(): Promise<void> {
   });
 }
 
-export function YouTubePlayer({
-  videoId,
-  startTime = 0,
-  endTime,
-  onTimeUpdate,
-  onReady,
-  autoPlay = false,
-  className = "",
-}: YouTubePlayerProps) {
-  const playerRef = useRef<YTPlayer | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const containerIdRef = useRef(`yt-player-${Math.random().toString(36).slice(2)}`);
-  const [isPlaying, setIsPlaying] = useState(false);
+export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>(
+  function YouTubePlayer(
+    {
+      videoId,
+      startTime = 0,
+      endTime,
+      onTimeUpdate,
+      onReady,
+      autoPlay = false,
+      className = "",
+    },
+    ref
+  ) {
+    const playerRef = useRef<YTPlayer | null>(null);
+    const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const containerIdRef = useRef(`yt-player-${Math.random().toString(36).slice(2)}`);
+    const [isPlaying, setIsPlaying] = useState(false);
 
-  const startTimeRef = useRef(startTime);
-  const endTimeRef = useRef(endTime);
+    const startTimeRef = useRef(startTime);
+    const endTimeRef = useRef(endTime);
 
-  // Keep refs in sync
-  useEffect(() => {
-    startTimeRef.current = startTime;
-    endTimeRef.current = endTime;
-  }, [startTime, endTime]);
+    // Keep refs in sync
+    useEffect(() => {
+      startTimeRef.current = startTime;
+      endTimeRef.current = endTime;
+    }, [startTime, endTime]);
 
-  // Time tracking interval
-  const startTracking = useCallback(() => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
+    // Expose imperative handle
+    useImperativeHandle(ref, () => ({
+      seekTo: (seconds: number) => {
+        if (playerRef.current) {
+          playerRef.current.seekTo(seconds, true);
+          playerRef.current.playVideo();
+        }
+      },
+      play: () => playerRef.current?.playVideo(),
+      pause: () => playerRef.current?.pauseVideo(),
+    }));
 
-    intervalRef.current = setInterval(() => {
-      if (!playerRef.current) return;
+    // Time tracking interval
+    const startTracking = useCallback(() => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
 
-      const currentTime = playerRef.current.getCurrentTime();
-      onTimeUpdate?.(currentTime);
+      intervalRef.current = setInterval(() => {
+        if (!playerRef.current) return;
 
-      // Loop back to start if we exceeded endTime
-      if (endTimeRef.current && currentTime >= endTimeRef.current) {
-        playerRef.current.seekTo(startTimeRef.current, true);
+        const currentTime = playerRef.current.getCurrentTime();
+        onTimeUpdate?.(currentTime);
+
+        // Pause at endTime instead of looping
+        if (endTimeRef.current && currentTime >= endTimeRef.current) {
+          playerRef.current.pauseVideo();
+        }
+      }, 100);
+    }, [onTimeUpdate]);
+
+    const stopTracking = useCallback(() => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
-    }, 100);
-  }, [onTimeUpdate]);
+    }, []);
 
-  const stopTracking = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-  }, []);
+    // Initialize player
+    useEffect(() => {
+      let mounted = true;
 
-  // Initialize player
-  useEffect(() => {
-    let mounted = true;
+      async function init() {
+        await loadYouTubeAPI();
+        if (!mounted) return;
 
-    async function init() {
-      await loadYouTubeAPI();
-      if (!mounted) return;
+        // Destroy previous player
+        if (playerRef.current) {
+          playerRef.current.destroy();
+          playerRef.current = null;
+        }
 
-      // Destroy previous player
-      if (playerRef.current) {
-        playerRef.current.destroy();
-        playerRef.current = null;
-      }
-
-      playerRef.current = new window.YT.Player(containerIdRef.current, {
-        videoId,
-        playerVars: {
-          autoplay: autoPlay ? 1 : 0,
-          start: Math.floor(startTime),
-          modestbranding: 1,
-          rel: 0,
-          fs: 1,
-          playsinline: 1,
-        },
-        events: {
-          onReady: (event) => {
-            const duration = event.target.getDuration();
-            onReady?.(duration);
-            if (autoPlay) {
-              event.target.seekTo(startTime, true);
-              event.target.playVideo();
-            }
+        playerRef.current = new window.YT.Player(containerIdRef.current, {
+          videoId,
+          playerVars: {
+            autoplay: autoPlay ? 1 : 0,
+            start: Math.floor(startTime),
+            modestbranding: 1,
+            rel: 0,
+            fs: 1,
+            playsinline: 1,
           },
-          onStateChange: (event) => {
-            if (event.data === window.YT.PlayerState.PLAYING) {
-              setIsPlaying(true);
-              startTracking();
-            } else {
-              setIsPlaying(false);
-              stopTracking();
-            }
+          events: {
+            onReady: (event) => {
+              const duration = event.target.getDuration();
+              onReady?.(duration);
+              if (autoPlay) {
+                event.target.seekTo(startTime, true);
+                event.target.playVideo();
+              }
+            },
+            onStateChange: (event) => {
+              if (event.data === window.YT.PlayerState.PLAYING) {
+                setIsPlaying(true);
+                startTracking();
+              } else {
+                setIsPlaying(false);
+                stopTracking();
+              }
+            },
           },
-        },
-      });
-    }
-
-    init();
-
-    return () => {
-      mounted = false;
-      stopTracking();
-      if (playerRef.current) {
-        try { playerRef.current.destroy(); } catch { /* ignore */ }
-        playerRef.current = null;
+        });
       }
-    };
-  }, [videoId]); // Only re-init on videoId change
 
-  // Seek to startTime when it changes significantly
-  useEffect(() => {
-    if (playerRef.current && !isPlaying) {
-      playerRef.current.seekTo(startTime, true);
-    }
-  }, [startTime, isPlaying]);
+      init();
 
-  return (
-    <div className={className}>
-      <div className="relative aspect-video w-full overflow-hidden rounded-xl border bg-black">
-        <div id={containerIdRef.current} className="absolute inset-0 w-full h-full" />
+      return () => {
+        mounted = false;
+        stopTracking();
+        if (playerRef.current) {
+          try {
+            playerRef.current.destroy();
+          } catch {
+            /* ignore */
+          }
+          playerRef.current = null;
+        }
+      };
+    }, [videoId]); // Only re-init on videoId change
+
+    // Seek to startTime when it changes and not playing
+    useEffect(() => {
+      if (playerRef.current && !isPlaying) {
+        playerRef.current.seekTo(startTime, true);
+      }
+    }, [startTime, isPlaying]);
+
+    return (
+      <div className={className}>
+        <div className="relative aspect-video w-full overflow-hidden rounded-xl border bg-black">
+          <div id={containerIdRef.current} className="absolute inset-0 w-full h-full" />
+        </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
+);

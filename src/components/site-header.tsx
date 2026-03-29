@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
-import { Film, Plus, LogIn, LayoutDashboard, LogOut, User } from "lucide-react";
+import { Film, LogIn, LayoutDashboard, LogOut } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -34,33 +34,24 @@ export function SiteHeader() {
           </span>
         </Link>
 
-        {/* Nav links - center */}
-        <nav className="hidden md:flex items-center gap-1 ml-8">
-          <Link
-            href="/"
-            className="relative px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors group"
-          >
-            Filmy
-            <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-primary scale-x-0 group-hover:scale-x-100 transition-transform origin-left" />
-          </Link>
-          <Link
-            href="/add/hlasky"
-            className="relative px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors group"
-          >
-            Extrahovať hlášky
-            <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-primary scale-x-0 group-hover:scale-x-100 transition-transform origin-left" />
-          </Link>
-        </nav>
+        {/* Nav links */}
+        {session?.user && (
+          <nav className="flex items-center gap-1 ml-8">
+            <Link
+              href="/dashboard"
+              className="relative px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors group"
+            >
+              <span className="flex items-center gap-1.5">
+                <LayoutDashboard className="h-4 w-4" />
+                <span className="hidden sm:inline">Dashboard</span>
+              </span>
+              <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-primary scale-x-0 group-hover:scale-x-100 transition-transform origin-left" />
+            </Link>
+          </nav>
+        )}
 
         {/* Right side actions */}
         <div className="flex flex-1 items-center justify-end gap-2">
-          {/* Mobile add button */}
-          <Button variant="ghost" size="icon" asChild className="md:hidden">
-            <Link href="/add/hlasky">
-              <Plus className="h-5 w-5" />
-            </Link>
-          </Button>
-
           <ThemeToggle />
 
           {/* Auth section */}
@@ -95,13 +86,6 @@ export function SiteHeader() {
                     {session.user.email}
                   </p>
                 </div>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href="/dashboard" className="cursor-pointer">
-                    <LayoutDashboard className="h-4 w-4 mr-2" />
-                    Dashboard
-                  </Link>
-                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() => signOut({ callbackUrl: "/" })}

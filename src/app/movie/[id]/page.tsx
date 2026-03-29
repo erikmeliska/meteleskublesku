@@ -1,74 +1,107 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Calendar, Clapperboard, PenTool, Music, Users } from "lucide-react";
-import { getMovie } from "@/lib/scraper";
-import { parseMovieTitle } from "@/lib/utils";
-import { ImageGallery } from "@/components/image-gallery";
-import { AudioPlayerBar } from "@/components/audio-player";
+import { ArrowLeft, Calendar, Youtube } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
+import { UserMovieTitleEditor, UserMovieInfoEditor } from "@/components/user-movie-editor";
+import { MovieContent } from "@/components/movie-content";
 
 interface MoviePageProps {
-  params: Promise<{ id: string }>;
+  params: Promise<{ id: string; clipId?: string }>;
   searchParams: Promise<{ audio?: string }>;
 }
 
-export async function generateMetadata({
-  params,
-}: MoviePageProps): Promise<Metadata> {
+export async function generateMetadata({ params }: MoviePageProps): Promise<Metadata> {
   const { id } = await params;
-  const movie = await getMovie(id);
+  const movie = await prisma.userMovie.findUnique({ where: { id: `mov_${id}` } });
   if (!movie) return { title: "Film nenájdený" };
 
-  const { title, year } = parseMovieTitle(movie.title);
   return {
-    title: `${title}${year ? ` (${year})` : ""}`,
-    description: movie.desc.join(" ").slice(0, 160),
+    title: `${movie.title}${movie.year ? ` (${movie.year})` : ""}`,
+    description: movie.plot?.slice(0, 160) || undefined,
     openGraph: {
-      title: `${title} | Meteleskublesku`,
-      description: movie.desc.join(" ").slice(0, 160),
+      title: `${movie.title} | Meteleskublesku`,
+      description: movie.plot?.slice(0, 160) || undefined,
       type: "music.album",
     },
   };
 }
 
-function extractDescField(desc: string[], prefix: string): string | null {
-  const line = desc.find((d) => d.startsWith(prefix));
-  return line ? line.replace(prefix, "").trim() : null;
-}
-
-export default async function MoviePage({
-  params,
-  searchParams,
-}: MoviePageProps) {
-  const { id } = await params;
+export default async function MoviePage({ params, searchParams }: MoviePageProps) {
+  const { id, clipId } = await params;
   const sp = await searchParams;
-  const movie = await getMovie(id);
 
+  const movieId = `mov_${id}`;
+
+  const [movie, session] = await Promise.all([
+    prisma.userMovie.findUnique({ where: { id: movieId } }),
+    auth(),
+  ]);
   if (!movie) notFound();
 
-  let audioIndex = parseInt(sp.audio || "1") - 1;
-  if (isNaN(audioIndex) || audioIndex < 0 || audioIndex >= movie.audio.length) {
-    audioIndex = 0;
+  const clips = await prisma.userClip.findMany({
+    where: { movieId },
+    orderBy: { createdAt: "asc" },
+  });
+
+  // Determine edit permissions: owner or admin
+  const isOwner = session?.user?.id === movie.userId;
+  const isAdmin = session?.user?.id
+    ? (await prisma.user.findUnique({ where: { id: session.user.id }, select: { role: true } }))?.role === "admin"
+    : false;
+  const canEdit = isOwner || isAdmin;
+
+  // Build audio tracks from clips
+  const tracks = clips.map((clip) => ({
+    id: clip.id,
+    text: clip.quoteText || clip.name,
+    url: clip.audioPath,
+    length: clip.duration ? `${Math.round(clip.duration)}s` : "",
+    shareHash: clip.shareHash,
+    images: [clip.imageBegin, clip.imageMiddle, clip.imageEnd].filter((img): img is string => !!img),
+  }));
+
+  // Build images: movie-level images + clip screenshots
+  const movieImages: { thumbnail: string; url: string }[] = movie.images
+    ? JSON.parse(movie.images)
+    : [];
+  const clipImages = clips
+    .flatMap((clip) => [clip.imageBegin, clip.imageMiddle, clip.imageEnd])
+    .filter((img): img is string => !!img)
+    .map((img) => ({ thumbnail: img, url: img }));
+  const images = [...movieImages, ...clipImages];
+
+  // Resolve initial track: from clip URL or ?audio= fallback
+  let audioIndex = 0;
+  if (clipId) {
+    const fullClipId = `clip_${clipId}`;
+    const idx = clips.findIndex((c) => c.id === fullClipId);
+    if (idx >= 0) audioIndex = idx;
+  } else if (sp.audio) {
+    const idx = parseInt(sp.audio) - 1;
+    if (!isNaN(idx) && idx >= 0 && idx < tracks.length) audioIndex = idx;
   }
 
-  const { title, year } = parseMovieTitle(movie.title);
-  const director = extractDescField(movie.desc, "Režie:");
-  const screenplay = extractDescField(movie.desc, "Scénář:");
-  const music = extractDescField(movie.desc, "Hudba:");
-  const namet = extractDescField(movie.desc, "Námět:");
-  const cast = extractDescField(movie.desc, "Hrají:");
-  const mainImage = movie.images[0]?.url;
+  const posterUrl = movie.posterUrl || null;
+  const mainImage = posterUrl || movie.thumbnail || images[0]?.url;
+  const isLegacy = movie.videoId.startsWith("legacy-");
+
+  function imgSrc(src: string) {
+    return src.startsWith("http") ? src : `/api/media/image?path=${encodeURIComponent(src)}`;
+  }
 
   return (
-    <div className="pb-40">
+    <div>
       {/* Cinematic banner */}
       <div className="relative h-48 md:h-64 overflow-hidden">
         {mainImage ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={`/api/media/image?path=${encodeURIComponent(mainImage)}`}
+              src={imgSrc(mainImage)}
               alt=""
               className="absolute inset-0 w-full h-full object-cover scale-110 blur-xl"
               aria-hidden="true"
@@ -79,7 +112,6 @@ export default async function MoviePage({
           <div className="absolute inset-0 gradient-hero" />
         )}
 
-        {/* Banner content */}
         <div className="absolute inset-0 flex items-end">
           <div className="container pb-6 animate-fade-in">
             <Link
@@ -90,14 +122,34 @@ export default async function MoviePage({
               Späť
             </Link>
             <div className="flex items-end gap-3">
-              <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
-                {title}
-              </h1>
-              {year && (
+              {canEdit ? (
+                <UserMovieTitleEditor movieId={movieId} initialTitle={movie.title} />
+              ) : (
+                <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
+                  {movie.title}
+                </h1>
+              )}
+              {movie.year && (
                 <Badge variant="secondary" className="mb-1 text-sm">
                   <Calendar className="h-3 w-3 mr-1" />
-                  {year}
+                  {movie.year}
                 </Badge>
+              )}
+              {isAdmin && !isOwner && (
+                <Badge className="mb-1 text-sm bg-red-600 text-white border-0">Admin</Badge>
+              )}
+              {isOwner && !isLegacy && (
+                <Badge className="mb-1 text-sm bg-primary/90 text-white border-0">Moje</Badge>
+              )}
+            </div>
+            <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
+              {isLegacy ? (
+                <span>{clips.length} {clips.length === 1 ? "nahrávka" : clips.length < 5 ? "nahrávky" : "nahrávok"}</span>
+              ) : (
+                <>
+                  <Youtube className="h-4 w-4 text-red-500" />
+                  <span>{clips.length} {clips.length === 1 ? "hláška" : clips.length < 5 ? "hlášky" : "hlášok"}</span>
+                </>
               )}
             </div>
           </div>
@@ -106,82 +158,92 @@ export default async function MoviePage({
 
       {/* Content */}
       <div className="container py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* Left: Image gallery */}
-          <div className="lg:col-span-5 animate-fade-in">
-            <ImageGallery images={movie.images} title={title} />
-          </div>
-
-          {/* Middle: Movie info */}
-          <div className="lg:col-span-3 animate-fade-in" style={{ animationDelay: "100ms" }}>
-            <div className="space-y-4">
-              {director && (
-                <div className="flex gap-3">
-                  <Clapperboard className="h-4 w-4 mt-0.5 text-primary shrink-0" />
-                  <div>
-                    <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
-                      Réžia
-                    </p>
-                    <p className="text-sm mt-0.5">{director}</p>
-                  </div>
-                </div>
+        <MovieContent
+          tracks={tracks}
+          initialTrackIndex={audioIndex}
+          movieId={movieId}
+          images={images}
+          movieTitle={movie.title}
+        >
+          {/* Movie info slot */}
+          {posterUrl ? (
+            <div className="flex gap-4">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={posterUrl}
+                alt={movie.title}
+                className="w-28 md:w-36 rounded-xl shadow-lg object-cover shrink-0"
+              />
+              <div className="flex-1 min-w-0 space-y-1.5 text-sm">
+                {movie.director && (
+                  <p><span className="text-muted-foreground">Réžia:</span> {movie.director}</p>
+                )}
+                {movie.cast && (
+                  <p className="line-clamp-2"><span className="text-muted-foreground">Hrajú:</span> {movie.cast}</p>
+                )}
+                {movie.plot && (
+                  <p className="text-xs text-muted-foreground leading-relaxed line-clamp-4">{movie.plot}</p>
+                )}
+                {canEdit && (
+                  <UserMovieInfoEditor
+                    movieId={movieId}
+                    movieTitle={movie.title}
+                    readOnly={false}
+                    compact
+                    movie={{
+                      year: movie.year,
+                      director: movie.director,
+                      screenplay: movie.screenplay,
+                      music: movie.music,
+                      cast: movie.cast,
+                      plot: movie.plot,
+                    }}
+                  />
+                )}
+              </div>
+            </div>
+          ) : (movie.director || movie.cast) ? (
+            <div className="space-y-1.5 text-sm">
+              {movie.director && (
+                <p><span className="text-muted-foreground">Réžia:</span> {movie.director}</p>
               )}
-              {namet && (
-                <div className="flex gap-3">
-                  <PenTool className="h-4 w-4 mt-0.5 text-primary shrink-0" />
-                  <div>
-                    <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
-                      Námět
-                    </p>
-                    <p className="text-sm mt-0.5">{namet}</p>
-                  </div>
-                </div>
+              {movie.cast && (
+                <p><span className="text-muted-foreground">Hrajú:</span> {movie.cast}</p>
               )}
-              {screenplay && (
-                <div className="flex gap-3">
-                  <PenTool className="h-4 w-4 mt-0.5 text-primary shrink-0" />
-                  <div>
-                    <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
-                      Scenár
-                    </p>
-                    <p className="text-sm mt-0.5">{screenplay}</p>
-                  </div>
-                </div>
-              )}
-              {music && (
-                <div className="flex gap-3">
-                  <Music className="h-4 w-4 mt-0.5 text-primary shrink-0" />
-                  <div>
-                    <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
-                      Hudba
-                    </p>
-                    <p className="text-sm mt-0.5">{music}</p>
-                  </div>
-                </div>
-              )}
-              {cast && (
-                <div className="flex gap-3">
-                  <Users className="h-4 w-4 mt-0.5 text-primary shrink-0" />
-                  <div>
-                    <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
-                      Hrajú
-                    </p>
-                    <p className="text-sm mt-0.5 leading-relaxed">{cast}</p>
-                  </div>
-                </div>
+              {canEdit && (
+                <UserMovieInfoEditor
+                  movieId={movieId}
+                  movieTitle={movie.title}
+                  readOnly={false}
+                  compact
+                  movie={{
+                    year: movie.year,
+                    director: movie.director,
+                    screenplay: movie.screenplay,
+                    music: movie.music,
+                    cast: movie.cast,
+                    plot: movie.plot,
+                  }}
+                />
               )}
             </div>
-          </div>
-
-          {/* Right: Audio playlist */}
-          <div className="lg:col-span-4 animate-fade-in" style={{ animationDelay: "200ms" }}>
-            <AudioPlayerBar
-              tracks={movie.audio}
-              initialTrackIndex={audioIndex}
-              movieId={id}
+          ) : canEdit ? (
+            <UserMovieInfoEditor
+              movieId={movieId}
+              movieTitle={movie.title}
+              readOnly={false}
+              compact
+              movie={{
+                year: movie.year,
+                director: movie.director,
+                screenplay: movie.screenplay,
+                music: movie.music,
+                cast: movie.cast,
+                plot: movie.plot,
+              }}
             />
-          </div>
-        </div>
+          ) : null}
+        </MovieContent>
       </div>
     </div>
   );

@@ -3,7 +3,7 @@ export interface Movie {
   title: string;
   image: string | null;
   desc: string[];
-  audio: AudioTrack[];
+  audio: LegacyAudioTrack[];
   images: MovieImage[];
 }
 
@@ -12,10 +12,21 @@ export interface MovieListItem {
   title: string;
   image: string | null;
   desc: string[];
-  audioTracks?: string[]; // audio track names for search
+  audioTracks?: { id: string; text: string }[]; // clips for search
+  isMine?: boolean; // user's own extracted film
 }
 
 export interface AudioTrack {
+  id: string; // clip_xxx (full DB id)
+  text: string;
+  url: string;
+  length: string;
+  shareHash?: string | null;
+  images?: string[]; // clip screenshot paths
+}
+
+/** Legacy audio track from scraper (no clip ID) */
+export interface LegacyAudioTrack {
   text: string;
   url: string;
   length: string;

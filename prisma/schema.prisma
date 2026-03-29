@@ -59,7 +59,7 @@ model VerificationToken {
 // === Application tables ===
 
 model UserClip {
-  id          String   @id @default(cuid())
+  id          String   @id // clip_xxxxx format
   userId      String
   movieId     String?
   videoId     String
@@ -86,6 +86,49 @@ model UserClip {
   @@index([movieId])
   @@index([isPublic])
   @@index([shareHash])
+}
+
+// User's own movies (from extracted clips)
+model UserMovie {
+  id          String   @id // mov_xxxxx format
+  userId      String
+  videoId     String
+  title       String
+  year        Int?
+  director    String?
+  screenplay  String?
+  music       String?
+  cast        String?
+  plot        String?
+  thumbnail   String?
+  images      String?  // JSON array of {thumbnail, url}
+  posterUrl   String?  // CSFD/external poster URL
+  csfdId      Int?     // CSFD movie ID for linking
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, videoId])
+  @@index([userId])
+}
+
+// Video history – remembers videos the user already analyzed
+model VideoHistory {
+  id             String   @id @default(cuid())
+  userId         String
+  videoId        String
+  videoTitle     String
+  videoUrl       String
+  thumbnail      String   @default("")
+  duration       String   @default("")
+  author         String   @default("")
+  subtitleCues   String?  // JSON array of SubtitleCue (cached)
+  quotes         String?  // JSON array of GeminiQuote (cached)
+  lastStep       String   @default("subtitles") // subtitles | quotes
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([userId, videoId])
+  @@index([userId])
 }
 
 // Temporary storage for extraction drafts (before saving)

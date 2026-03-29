@@ -3,7 +3,7 @@
   "version": "2.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev --turbopack --port 3781",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.9.1",
+    "@google/genai": "^1.47.0",
     "@prisma/adapter-better-sqlite3": "^7.5.0",
     "@prisma/client": "^7.5.0",
     "@radix-ui/react-dialog": "^1.1.14",
@@ -34,6 +35,7 @@
     "next": "^16.1.6",
     "next-auth": "5.0.0-beta.30",
     "next-themes": "^0.4.6",
+    "node-csfd-api": "^5.8.0",
     "node-html-parser": "^6.1.13",
     "radix-ui": "^1.4.3",
     "react": "^19.1.0",
@@ -43,7 +45,7 @@
     "sonner": "^2.0.3",
     "tailwind-merge": "^3.3.0",
     "youtube-dl-exec": "^3.0.12",
-    "ytsr": "^3.8.4",
+    "youtube-sr": "^4.3.12",
     "zod": "^3.25.3"
   },
   "devDependencies": {

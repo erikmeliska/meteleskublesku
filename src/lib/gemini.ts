@@ -1,15 +1,16 @@
 /**
- * Gemini Flash 2.0 integration for subtitle analysis
+ * Gemini integration for subtitle analysis
  */
 
+import { GoogleGenAI } from "@google/genai";
 import type { GeminiQuote, SubtitleCue } from "@/types/hlasky";
 
-const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+const MODEL = "gemini-3-flash-preview";
 
-function getApiKey(): string {
+function getClient(): GoogleGenAI {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error("GEMINI_API_KEY is not set");
-  return key;
+  return new GoogleGenAI({ apiKey: key });
 }
 
 /**
@@ -70,18 +71,20 @@ export async function analyzeQuotesWithGemini(
   subtitleCues: SubtitleCue[],
   videoTitle: string
 ): Promise<GeminiQuote[]> {
-  const apiKey = getApiKey();
+  const client = getClient();
 
-  // Format subtitles for Gemini
+  // Format subtitles for Gemini – times in raw seconds so the model returns seconds too
   const formattedSubs = subtitleCues
-    .map((cue) => `[${formatTime(cue.startTime)} - ${formatTime(cue.endTime)}] ${cue.text}`)
+    .map((cue) => `[${cue.startTime.toFixed(1)}s - ${cue.endTime.toFixed(1)}s] ${cue.text}`)
     .join("\n");
 
   const prompt = `Analyzuj nasledujúce titulky z filmu/videa "${videoTitle}" a identifikuj najzaujímavejšie, najzábavnejšie a najpamätnejšie hlášky a citáty.
 
+Časy v titulkoch sú v SEKUNDÁCH od začiatku videa (napr. 1791.0s = 29 minút a 51 sekúnd).
+
 Pre každú hlášku uveď:
 - Presný text hlášky
-- Čas začiatku (startTime) a konca (endTime) v sekundách
+- Čas začiatku (startTime) a konca (endTime) - MUSIA byť v SEKUNDÁCH, rovnaký formát ako v titulkoch
 - Meno postavy ak je zrejmé (character)
 - Skóre istoty 0-1 (confidence) - ako veľmi je to zaujímavá/pamätná hláška
 
@@ -99,90 +102,92 @@ Odpovedz VÝHRADNE v JSON formáte - pole objektov:
 [
   {
     "text": "presný text hlášky",
-    "startTime": 123.45,
-    "endTime": 128.90,
+    "startTime": 1791.0,
+    "endTime": 1795.0,
     "character": "meno postavy alebo null",
     "confidence": 0.95
   }
 ]
 
-Vráť maximálne 30 najlepších hlášok, zoradených podľa confidence od najvyššej.
-Ak nenájdeš žiadne zaujímavé hlášky, vráť prázdne pole [].
-Odpovedz IBA JSON, žiadny iný text.`;
+DÔLEŽITÉ PRAVIDLÁ:
+- startTime a endTime MUSIA byť v sekundách (celé číslo alebo desatinné). Príklad: 29. minúta a 51. sekunda = 1791.0, NIE 29.51.
+- Použi PRESNE tie časy, ktoré sú uvedené v titulkoch pri danej hlášky.
+- Vráť maximálne 30 najlepších hlášok, zoradených podľa confidence od najvyššej.
+- NIKDY neopakuj rovnakú hlášku viackrát. Každá hláška musí byť unikátna - iný text ALEBO iný čas.
+- Ak nenájdeš žiadne zaujímavé hlášky, vráť prázdne pole [].
+- Odpovedz IBA JSON, žiadny iný text.`;
 
-  const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [
-        {
-          parts: [{ text: prompt }],
-        },
-      ],
-      generationConfig: {
-        temperature: 0.3,
-        maxOutputTokens: 4096,
-        responseMimeType: "application/json",
-      },
-    }),
+  const response = await client.models.generateContent({
+    model: MODEL,
+    contents: prompt,
+    config: {
+      temperature: 0.4,
+      maxOutputTokens: 8192,
+      responseMimeType: "application/json",
+    },
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
-  }
-
-  const data = await response.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  const text = response.text;
 
   if (!text) {
     throw new Error("Empty response from Gemini");
   }
 
-  try {
-    const quotes: Array<{
-      text: string;
-      startTime: number;
-      endTime: number;
-      character?: string;
-      confidence: number;
-    }> = JSON.parse(text);
+  console.log("Gemini raw response (first 500 chars):", text.substring(0, 500));
 
-    return quotes.map((q, index) => ({
-      id: `quote-${index}`,
-      text: q.text,
-      startTime: q.startTime,
-      endTime: q.endTime,
-      character: q.character || undefined,
-      confidence: q.confidence,
-    }));
-  } catch {
-    // Try to extract JSON from the response
-    const jsonMatch = text.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-      const quotes = JSON.parse(jsonMatch[0]);
-      return quotes.map(
-        (
-          q: {
-            text: string;
-            startTime: number;
-            endTime: number;
-            character?: string;
-            confidence: number;
-          },
-          index: number
-        ) => ({
-          id: `quote-${index}`,
-          text: q.text,
-          startTime: q.startTime,
-          endTime: q.endTime,
-          character: q.character || undefined,
-          confidence: q.confidence,
-        })
-      );
-    }
+  // Clean up: strip markdown code fences if present
+  const cleaned = text
+    .replace(/^```(?:json)?\s*\n?/i, "")
+    .replace(/\n?```\s*$/i, "")
+    .trim();
+
+  // Try to find and parse the JSON array
+  const jsonStr = cleaned.startsWith("[") ? cleaned : cleaned.match(/\[[\s\S]*\]/)?.[0];
+
+  if (!jsonStr) {
     throw new Error("Failed to parse Gemini response as JSON");
   }
+
+  let quotes: Array<{
+    text: string;
+    startTime: number;
+    endTime: number;
+    character?: string;
+    confidence: number;
+  }>;
+
+  try {
+    quotes = JSON.parse(jsonStr);
+  } catch {
+    // Truncated JSON - try to salvage complete objects
+    const objectPattern = /\{[^{}]*"text"\s*:\s*"[^"]*"[^{}]*\}/g;
+    const matches = jsonStr.match(objectPattern);
+    if (!matches || matches.length === 0) {
+      throw new Error("Failed to parse Gemini response as JSON");
+    }
+    console.log(`Gemini JSON was truncated, salvaged ${matches.length} complete objects`);
+    quotes = matches.map((m) => JSON.parse(m));
+  }
+
+  const mapped = quotes.map((q, index) => ({
+    id: `quote-${index}`,
+    text: q.text,
+    startTime: q.startTime,
+    endTime: q.endTime,
+    character: q.character || undefined,
+    confidence: q.confidence,
+  }));
+  return deduplicateQuotes(mapped);
+}
+
+function deduplicateQuotes(quotes: GeminiQuote[]): GeminiQuote[] {
+  const seen = new Set<string>();
+  return quotes.filter((q) => {
+    const key = q.text.toLowerCase().trim();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function formatTime(sec: number): string {

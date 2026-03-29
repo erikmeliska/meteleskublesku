@@ -83,7 +83,7 @@ export async function getMovieListWithAudio(): Promise<MovieListItem[]> {
       if (detail?.audio) {
         enriched[i + j] = {
           ...enriched[i + j],
-          audioTracks: detail.audio.map((a) => a.text),
+          audioTracks: detail.audio.map((a, idx) => ({ id: `legacy-${idx}`, text: a.text })),
         };
       }
     });

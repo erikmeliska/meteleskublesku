@@ -16,7 +16,11 @@ export function MovieCard({ movie, index = 0 }: MovieCardProps) {
 
   return (
     <Link
-      href={`/movie/${movie.id}`}
+      href={
+        movie.audioTracks?.[0]
+          ? `/movie/${movie.id.replace(/^mov_/, "")}/clip/${movie.audioTracks[0].id.replace(/^clip_/, "")}`
+          : `/movie/${movie.id.replace(/^mov_/, "")}`
+      }
       className="animate-fade-in"
       style={{ animationDelay: `${delay}ms` }}
     >
@@ -27,7 +31,11 @@ export function MovieCard({ movie, index = 0 }: MovieCardProps) {
             <>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={`/api/media/image?path=${encodeURIComponent(movie.image)}`}
+                src={
+                  movie.image.startsWith("http")
+                    ? movie.image
+                    : `/api/media/image?path=${encodeURIComponent(movie.image)}`
+                }
                 alt={title}
                 className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                 loading="lazy"
@@ -54,6 +62,15 @@ export function MovieCard({ movie, index = 0 }: MovieCardProps) {
               className="absolute top-2 right-2 text-[10px] px-1.5 py-0.5 bg-black/50 text-white border-0 backdrop-blur-sm"
             >
               {year}
+            </Badge>
+          )}
+
+          {/* Mine badge */}
+          {movie.isMine && (
+            <Badge
+              className="absolute top-2 left-2 text-[10px] px-1.5 py-0.5 bg-primary/90 text-white border-0 backdrop-blur-sm"
+            >
+              Moje
             </Badge>
           )}
 

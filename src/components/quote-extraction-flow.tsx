@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import {
   Search,
   Sparkles,
@@ -21,6 +21,10 @@ import {
   Volume2,
   Youtube,
   Wand2,
+  RefreshCw,
+  History,
+  Plus,
+  Type,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,7 +33,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
-import { YouTubePlayer } from "@/components/youtube-player";
+import { YouTubePlayer, type YouTubePlayerHandle } from "@/components/youtube-player";
 import { TimelineSlider } from "@/components/timeline-slider";
 import { cn } from "@/lib/utils";
 import { formatSecondsToTime } from "@/lib/utils";
@@ -48,6 +52,18 @@ interface VideoResult {
   duration: string;
   author: string;
   videoId: string;
+}
+
+interface HistoryEntry {
+  id: string;
+  videoId: string;
+  videoTitle: string;
+  videoUrl: string;
+  thumbnail: string;
+  duration: string;
+  author: string;
+  lastStep: string;
+  updatedAt: string;
 }
 
 const STEPS: { key: FlowStep; label: string; icon: React.ReactNode }[] = [
@@ -83,18 +99,229 @@ export function QuoteExtractionFlow() {
   const [editingSegmentId, setEditingSegmentId] = useState<string | null>(null);
   const [playerCurrentTime, setPlayerCurrentTime] = useState(0);
   const [videoDuration, setVideoDuration] = useState(0);
+  const editorPlayerRef = useRef<YouTubePlayerHandle>(null);
+  const manualPlayerRef = useRef<YouTubePlayerHandle>(null);
+
+  // Manual clip state
+  const [manualStart, setManualStart] = useState(0);
+  const [manualEnd, setManualEnd] = useState(10);
+  const [manualText, setManualText] = useState("");
 
   // Extraction state
   const [extractionProgress, setExtractionProgress] = useState(0);
   const [extractionResults, setExtractionResults] = useState<
-    Array<{ segmentId: string; audioPath: string; error?: string }>
+    Array<{
+      segmentId: string;
+      audioPath: string;
+      imageBegin?: string;
+      imageMiddle?: string;
+      imageEnd?: string;
+      duration?: number;
+      error?: string;
+    }>
   >([]);
   const [saving, setSaving] = useState(false);
+
+  // Movie assignment state
+  const [assignedMovieId, setAssignedMovieId] = useState<string | null>(null);
+  const [assignedMovieTitle, setAssignedMovieTitle] = useState<string | null>(null);
+  const [movieMatches, setMovieMatches] = useState<Array<{ id: string; title: string; posterUrl: string | null; year: number | null }>>([]);
+  const [movieMatchLoading, setMovieMatchLoading] = useState(false);
+
+  // History state
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
 
   // Error state
   const [error, setError] = useState<string | null>(null);
 
   const stepIndex = STEPS.findIndex((s) => s.key === step);
+
+  // ──────────── HISTORY ────────────
+
+  const loadHistory = useCallback(async () => {
+    try {
+      const res = await fetch("/api/history");
+      const data = await res.json();
+      setHistory(data.history || []);
+    } catch {
+      // silently fail
+    }
+    setHistoryLoading(false);
+  }, []);
+
+  useEffect(() => {
+    loadHistory();
+  }, [loadHistory]);
+
+  const saveHistory = useCallback(
+    async (params: {
+      videoId: string;
+      videoTitle: string;
+      videoUrl: string;
+      thumbnail?: string;
+      duration?: string;
+      author?: string;
+      subtitleCues?: SubtitleCue[];
+      quotes?: GeminiQuote[];
+      lastStep: string;
+    }) => {
+      try {
+        await fetch("/api/history", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...params,
+            subtitleCues: params.subtitleCues ? JSON.stringify(params.subtitleCues) : undefined,
+            quotes: params.quotes ? JSON.stringify(params.quotes) : undefined,
+          }),
+        });
+        loadHistory();
+      } catch {
+        // silently fail
+      }
+    },
+    [loadHistory]
+  );
+
+  const handleResumeFromHistory = useCallback(
+    async (entry: HistoryEntry) => {
+      setError(null);
+      setStep("analyze");
+      setAnalyzeLoading(true);
+
+      const video: VideoResult = {
+        title: entry.videoTitle,
+        url: entry.videoUrl,
+        thumbnail: entry.thumbnail,
+        duration: entry.duration,
+        author: entry.author,
+        videoId: entry.videoId,
+      };
+      setSelectedVideo(video);
+
+      try {
+        // Load full history entry
+        setAnalyzeStatus("Načítavam uložené dáta...");
+        const res = await fetch(`/api/history/${entry.videoId}`);
+        const data = await res.json();
+
+        if (data.error) throw new Error(data.error);
+
+        const fullEntry = data.entry;
+        const cachedCues: SubtitleCue[] = fullEntry.subtitleCues
+          ? JSON.parse(fullEntry.subtitleCues)
+          : null;
+        const cachedQuotes: GeminiQuote[] = fullEntry.quotes
+          ? JSON.parse(fullEntry.quotes)
+          : null;
+
+        setVideoInfo({
+          videoId: entry.videoId,
+          title: entry.videoTitle,
+          description: "",
+          duration: 0,
+          thumbnail: entry.thumbnail,
+          subtitleLanguages: [],
+          autoSubtitleLanguages: [],
+        });
+
+        if (cachedQuotes && cachedCues) {
+          // Resume to quotes
+          setSubtitleCues(cachedCues);
+          setQuotes(cachedQuotes);
+          setAnalyzeLoading(false);
+          setStep("quotes");
+        } else if (cachedCues) {
+          // Have subtitles, run Gemini
+          setSubtitleCues(cachedCues);
+          setAnalyzeStatus("AI analyzuje hlášky...");
+          const analyzeRes = await fetch("/api/youtube/analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              subtitles: cachedCues,
+              videoTitle: entry.videoTitle,
+            }),
+          });
+          const analyzeData = await analyzeRes.json();
+          if (analyzeData.error) throw new Error(analyzeData.error);
+
+          const newQuotes = analyzeData.quotes || [];
+          setQuotes(newQuotes);
+
+          await saveHistory({
+            videoId: entry.videoId,
+            videoTitle: entry.videoTitle,
+            videoUrl: entry.videoUrl,
+            thumbnail: entry.thumbnail,
+            duration: entry.duration,
+            author: entry.author,
+            quotes: newQuotes,
+            lastStep: "quotes",
+          });
+
+          setAnalyzeLoading(false);
+          setStep("quotes");
+        } else {
+          // No subtitles/quotes cached → manual mode
+          setAnalyzeLoading(false);
+          setStep("manual");
+        }
+      } catch (err) {
+        setAnalyzeLoading(false);
+        setError(String(err instanceof Error ? err.message : err));
+        setStep("search");
+      }
+    },
+    [saveHistory]
+  );
+
+  const handleRefreshQuotes = useCallback(async () => {
+    if (!videoInfo || subtitleCues.length === 0) return;
+
+    setStep("analyze");
+    setAnalyzeLoading(true);
+    setAnalyzeStatus("AI analyzuje hlášky odznova...");
+    setError(null);
+
+    try {
+      const analyzeRes = await fetch("/api/youtube/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subtitles: subtitleCues,
+          videoTitle: videoInfo.title,
+        }),
+      });
+      const analyzeData = await analyzeRes.json();
+      if (analyzeData.error) throw new Error(analyzeData.error);
+
+      const newQuotes = analyzeData.quotes || [];
+      setQuotes(newQuotes);
+      setSegments([]);
+
+      if (selectedVideo) {
+        await saveHistory({
+          videoId: videoInfo.videoId,
+          videoTitle: videoInfo.title,
+          videoUrl: selectedVideo.url,
+          thumbnail: selectedVideo.thumbnail,
+          duration: selectedVideo.duration,
+          author: selectedVideo.author,
+          quotes: newQuotes,
+          lastStep: "quotes",
+        });
+      }
+
+      setAnalyzeLoading(false);
+      setStep("quotes");
+    } catch (err) {
+      setAnalyzeLoading(false);
+      setError(String(err instanceof Error ? err.message : err));
+      setStep("quotes");
+    }
+  }, [videoInfo, subtitleCues, selectedVideo, saveHistory]);
 
   // ──────────── SEARCH ────────────
 
@@ -157,13 +384,34 @@ export function QuoteExtractionFlow() {
       setVideoInfo(subsData.videoInfo);
 
       if (!subsData.subtitles) {
+        // No subtitles → save to history and go to manual mode
+        await saveHistory({
+          videoId: video.videoId,
+          videoTitle: subsData.videoInfo.title,
+          videoUrl: video.url,
+          thumbnail: video.thumbnail,
+          duration: video.duration,
+          author: video.author,
+          lastStep: "subtitles",
+        });
         setAnalyzeLoading(false);
-        setError(subsData.message || "Titulky nie sú k dispozícii. Skúste iné video.");
-        setStep("search");
+        setStep("manual");
         return;
       }
 
       setSubtitleCues(subsData.subtitles);
+
+      // Save to history after subtitles download
+      await saveHistory({
+        videoId: video.videoId,
+        videoTitle: subsData.videoInfo.title,
+        videoUrl: video.url,
+        thumbnail: video.thumbnail,
+        duration: video.duration,
+        author: video.author,
+        subtitleCues: subsData.subtitles,
+        lastStep: "subtitles",
+      });
 
       // Step 2: Gemini analysis
       setAnalyzeStatus("AI analyzuje hlášky...");
@@ -181,7 +429,21 @@ export function QuoteExtractionFlow() {
         throw new Error(analyzeData.error);
       }
 
-      setQuotes(analyzeData.quotes || []);
+      const newQuotes = analyzeData.quotes || [];
+      setQuotes(newQuotes);
+
+      // Save to history after Gemini analysis
+      await saveHistory({
+        videoId: video.videoId,
+        videoTitle: subsData.videoInfo.title,
+        videoUrl: video.url,
+        thumbnail: video.thumbnail,
+        duration: video.duration,
+        author: video.author,
+        quotes: newQuotes,
+        lastStep: "quotes",
+      });
+
       setAnalyzeLoading(false);
       setStep("quotes");
     } catch (err) {
@@ -189,7 +451,7 @@ export function QuoteExtractionFlow() {
       setError(String(err instanceof Error ? err.message : err));
       setStep("search");
     }
-  }, []);
+  }, [saveHistory]);
 
   // ──────────── QUOTES SELECTION ────────────
 
@@ -237,6 +499,36 @@ export function QuoteExtractionFlow() {
     },
     [editingSegmentId]
   );
+
+  // ──────────── MOVIE ASSIGNMENT ────────────
+
+  const searchMovieMatches = useCallback(async (title: string) => {
+    if (!title.trim()) return;
+    setMovieMatchLoading(true);
+    try {
+      // Extract likely movie name from video title (remove year, quality tags etc.)
+      const cleanTitle = title
+        .replace(/\(\d{4}\)/g, "")
+        .replace(/\[.*?\]/g, "")
+        .replace(/(720p|1080p|HD|CZ|SK|dabing|titulky|celý film|cely film)/gi, "")
+        .trim();
+      const searchTerms = cleanTitle.split(/\s+/).slice(0, 4).join(" ");
+
+      const res = await fetch(`/api/movies/search?q=${encodeURIComponent(searchTerms)}`);
+      const data = await res.json();
+      setMovieMatches(data.movies || []);
+    } catch {
+      setMovieMatches([]);
+    }
+    setMovieMatchLoading(false);
+  }, []);
+
+  // Auto-search when entering review step
+  useEffect(() => {
+    if (step === "review" && videoInfo && !assignedMovieId && movieMatches.length === 0) {
+      searchMovieMatches(videoInfo.title);
+    }
+  }, [step, videoInfo, assignedMovieId, movieMatches.length, searchMovieMatches]);
 
   // ──────────── BATCH EXTRACTION ────────────
 
@@ -310,6 +602,9 @@ export function QuoteExtractionFlow() {
             filmTitle: videoInfo.title,
             quoteText: s.text,
             audioPath: result?.audioPath || "",
+            imageBegin: result?.imageBegin || undefined,
+            imageMiddle: result?.imageMiddle || undefined,
+            imageEnd: result?.imageEnd || undefined,
             beginTime: s.startTime,
             endTime: s.endTime,
             duration: s.endTime - s.startTime,
@@ -321,7 +616,10 @@ export function QuoteExtractionFlow() {
       const res = await fetch("/api/clips", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clips: clipsToSave }),
+        body: JSON.stringify({
+          clips: clipsToSave,
+          assignedMovieId: assignedMovieId || undefined,
+        }),
       });
 
       const data = await res.json();
@@ -481,6 +779,62 @@ export function QuoteExtractionFlow() {
               ))}
             </div>
           )}
+
+          {/* Video history */}
+          {history.length > 0 && searchResults.length === 0 && (
+            <div className="mt-8 animate-fade-in">
+              <div className="flex items-center gap-2 mb-4">
+                <History className="h-5 w-5 text-muted-foreground" />
+                <h2 className="text-lg font-semibold">Posledné videá</h2>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {history.map((entry, i) => (
+                  <Card
+                    key={entry.id}
+                    className="cursor-pointer card-hover group overflow-hidden animate-fade-in"
+                    style={{ animationDelay: `${i * 50}ms` }}
+                    onClick={() => handleResumeFromHistory(entry)}
+                  >
+                    <div className="relative aspect-video overflow-hidden">
+                      {entry.thumbnail ? (
+                        <img
+                          src={entry.thumbnail}
+                          alt={entry.videoTitle}
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-muted flex items-center justify-center">
+                          <Film className="h-8 w-8 text-muted-foreground" />
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center">
+                        <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transform scale-75 group-hover:scale-100 transition-all">
+                          <Play className="h-5 w-5 text-white" />
+                        </div>
+                      </div>
+                      <Badge className="absolute top-2 left-2 bg-primary/90 text-white border-0 text-[10px]">
+                        {entry.lastStep === "quotes" ? "Hlášky hotové" : "Titulky stiahnuté"}
+                      </Badge>
+                      {entry.duration && (
+                        <Badge className="absolute bottom-2 right-2 bg-black/70 text-white border-0 text-[10px]">
+                          <Clock className="h-3 w-3 mr-1" />
+                          {entry.duration}
+                        </Badge>
+                      )}
+                    </div>
+                    <CardContent className="p-3">
+                      <h3 className="font-medium text-sm line-clamp-2 leading-snug">
+                        {entry.videoTitle}
+                      </h3>
+                      <p className="text-xs text-muted-foreground mt-1.5">
+                        {entry.author}
+                      </p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -532,19 +886,39 @@ export function QuoteExtractionFlow() {
                 {videoInfo?.title}
               </p>
             </div>
-            <Button
-              onClick={() => setStep("review")}
-              disabled={segments.length === 0}
-              className="gradient-primary text-white"
-            >
-              Pokračovať
-              <ArrowRight className="h-4 w-4 ml-1" />
-              {segments.length > 0 && (
-                <Badge variant="secondary" className="ml-1.5 bg-white/20 text-white">
-                  {segments.length}
-                </Badge>
-              )}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setStep("manual")}
+                title="Pridať klipy manuálne"
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Manuálne
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefreshQuotes}
+                title="Znovu analyzovať hlášky"
+              >
+                <RefreshCw className="h-4 w-4 mr-1" />
+                Refresh
+              </Button>
+              <Button
+                onClick={() => setStep("review")}
+                disabled={segments.length === 0}
+                className="gradient-primary text-white"
+              >
+                Pokračovať
+                <ArrowRight className="h-4 w-4 ml-1" />
+                {segments.length > 0 && (
+                  <Badge variant="secondary" className="ml-1.5 bg-white/20 text-white">
+                    {segments.length}
+                  </Badge>
+                )}
+              </Button>
+            </div>
           </div>
 
           {/* Two-column: quotes list + video preview */}
@@ -632,6 +1006,186 @@ export function QuoteExtractionFlow() {
         </div>
       )}
 
+      {/* ═══════════ STEP: MANUAL ═══════════ */}
+      {step === "manual" && videoInfo && (
+        <div className="animate-fade-in">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setStep("search")}
+                className="mb-2"
+              >
+                <ArrowLeft className="h-4 w-4 mr-1" />
+                Späť
+              </Button>
+              <h2 className="text-xl font-bold">Manuálne pridávanie klipov</h2>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {videoInfo.title}
+              </p>
+            </div>
+            {segments.length > 0 && (
+              <Button
+                onClick={() => setStep("review")}
+                className="gradient-primary text-white"
+              >
+                Pokračovať
+                <ArrowRight className="h-4 w-4 ml-1" />
+                <Badge variant="secondary" className="ml-1.5 bg-white/20 text-white">
+                  {segments.length}
+                </Badge>
+              </Button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Video player */}
+            <div>
+              <YouTubePlayer
+                ref={manualPlayerRef}
+                videoId={videoInfo.videoId}
+                startTime={manualStart}
+                endTime={manualEnd}
+                onTimeUpdate={setPlayerCurrentTime}
+                onReady={(d) => {
+                  setVideoDuration(d);
+                  setManualEnd(Math.min(10, d));
+                }}
+              />
+            </div>
+
+            {/* Add clip controls */}
+            <div className="space-y-4">
+              <Card>
+                <CardContent className="p-5 space-y-4">
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <Plus className="h-4 w-4 text-primary" />
+                    Nový klip
+                  </h3>
+
+                  {/* Jump to time */}
+                  <div>
+                    <label className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1.5 flex items-center gap-1.5">
+                      <Clock className="h-3 w-3" />
+                      Skočiť na čas
+                    </label>
+                    <Input
+                      placeholder="napr. 45, 1:23, 1:02:30"
+                      className="h-8 text-sm font-mono"
+                      onKeyDown={(e) => {
+                        if (e.key !== "Enter") return;
+                        const val = (e.target as HTMLInputElement).value.trim();
+                        if (!val) return;
+                        // Parse time: "45" = 45s, "1:23" = 83s, "1:02:30" = 3750s
+                        const parts = val.split(":").map(Number);
+                        let sec = 0;
+                        if (parts.length === 1) sec = parts[0];
+                        else if (parts.length === 2) sec = parts[0] * 60 + parts[1];
+                        else if (parts.length === 3) sec = parts[0] * 3600 + parts[1] * 60 + parts[2];
+                        if (isNaN(sec) || sec < 0) return;
+                        const capped = Math.min(sec, videoDuration > 0 ? videoDuration : sec);
+                        setManualStart(capped);
+                        setManualEnd(Math.min(capped + 10, videoDuration > 0 ? videoDuration : capped + 10));
+                        manualPlayerRef.current?.seekTo(capped);
+                        (e.target as HTMLInputElement).value = "";
+                      }}
+                    />
+                  </div>
+
+                  {/* Timeline */}
+                  <TimelineSlider
+                    startTime={manualStart}
+                    endTime={manualEnd}
+                    duration={videoDuration}
+                    currentTime={playerCurrentTime}
+                    onChange={(s, e) => {
+                      setManualStart(s);
+                      setManualEnd(e);
+                    }}
+                    onStartChange={(t) => manualPlayerRef.current?.seekTo(t)}
+                  />
+
+                  {/* Text input */}
+                  <div>
+                    <label className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1.5 flex items-center gap-1.5">
+                      <Type className="h-3 w-3" />
+                      Text hlášky
+                    </label>
+                    <textarea
+                      value={manualText}
+                      onChange={(e) => setManualText(e.target.value)}
+                      placeholder="Napíšte text hlášky..."
+                      className="w-full rounded-lg border bg-background px-3 py-2 text-sm resize-none min-h-[60px] focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/30"
+                      rows={2}
+                    />
+                  </div>
+
+                  {/* Add button */}
+                  <Button
+                    onClick={() => {
+                      if (manualEnd <= manualStart) return;
+                      setSegments((prev) => [
+                        ...prev,
+                        {
+                          id: `seg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                          quoteId: `manual-${Date.now()}`,
+                          text: manualText.trim() || `Klip ${formatSecondsToTime(manualStart)} – ${formatSecondsToTime(manualEnd)}`,
+                          startTime: manualStart,
+                          endTime: manualEnd,
+                          status: "pending" as const,
+                        },
+                      ]);
+                      // Reset for next clip - start from where this one ended
+                      setManualStart(manualEnd);
+                      setManualEnd(Math.min(manualEnd + 10, videoDuration));
+                      setManualText("");
+                      manualPlayerRef.current?.seekTo(manualEnd);
+                    }}
+                    disabled={manualEnd <= manualStart}
+                    className="w-full gradient-primary text-white"
+                  >
+                    <Plus className="h-4 w-4 mr-1.5" />
+                    Pridať klip
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* Added segments list */}
+              {segments.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+                    Pridané klipy ({segments.length})
+                  </h4>
+                  {segments.map((seg, i) => (
+                    <Card key={seg.id} className="animate-fade-in">
+                      <CardContent className="p-3 flex items-center gap-3">
+                        <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                          <span className="text-[10px] font-bold text-primary">{i + 1}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm truncate">&ldquo;{seg.text}&rdquo;</p>
+                          <p className="text-xs text-muted-foreground font-mono">
+                            {formatSecondsToTime(seg.startTime)} – {formatSecondsToTime(seg.endTime)}
+                          </p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSegments((prev) => prev.filter((s) => s.id !== seg.id))}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ═══════════ STEP: EDITOR (inline in quotes) ═══════════ */}
       {step === "editor" && editingSegment && videoInfo && (
         <div className="animate-fade-in">
@@ -652,6 +1206,7 @@ export function QuoteExtractionFlow() {
             {/* Video player */}
             <div>
               <YouTubePlayer
+                ref={editorPlayerRef}
                 videoId={videoInfo.videoId}
                 startTime={editingSegment.startTime}
                 endTime={editingSegment.endTime}
@@ -676,6 +1231,7 @@ export function QuoteExtractionFlow() {
                     duration={videoDuration}
                     currentTime={playerCurrentTime}
                     onChange={updateSegmentTimes}
+                    onStartChange={(t) => editorPlayerRef.current?.seekTo(t)}
                   />
 
                   <div className="flex gap-2 mt-6">
@@ -715,11 +1271,11 @@ export function QuoteExtractionFlow() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setStep("quotes")}
+                onClick={() => setStep(subtitleCues.length > 0 ? "quotes" : "manual")}
                 className="mb-2"
               >
                 <ArrowLeft className="h-4 w-4 mr-1" />
-                Späť na hlášky
+                Späť
               </Button>
               <h2 className="text-xl font-bold">
                 Kontrola pred extrakciou
@@ -738,6 +1294,89 @@ export function QuoteExtractionFlow() {
               Extrahovať všetky
             </Button>
           </div>
+
+          {/* Movie assignment */}
+          <Card className="mb-6 animate-fade-in">
+            <CardContent className="p-4">
+              <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                <Film className="h-4 w-4 text-primary" />
+                Priradiť k filmu
+              </h3>
+
+              {assignedMovieId ? (
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium">{assignedMovieTitle}</p>
+                    <p className="text-xs text-muted-foreground">Klipy budú priradené k tomuto filmu</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setAssignedMovieId(null);
+                      setAssignedMovieTitle(null);
+                      if (videoInfo) searchMovieMatches(videoInfo.title);
+                    }}
+                  >
+                    Zmeniť
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {/* Search input */}
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Hľadať film v databáze..."
+                      defaultValue={videoInfo?.title || ""}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val.length >= 2) searchMovieMatches(val);
+                      }}
+                      className="h-9 text-sm"
+                    />
+                  </div>
+
+                  {/* Matches */}
+                  {movieMatchLoading ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Hľadám...
+                    </div>
+                  ) : movieMatches.length > 0 ? (
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                      {movieMatches.map((m) => (
+                        <button
+                          key={m.id}
+                          onClick={() => {
+                            setAssignedMovieId(m.id);
+                            setAssignedMovieTitle(m.title);
+                          }}
+                          className="w-full text-left p-2.5 rounded-lg border hover:border-primary/40 hover:bg-accent/30 transition-all flex items-center gap-3"
+                        >
+                          {m.posterUrl && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={m.posterUrl.startsWith("http") ? m.posterUrl : `/api/media/image?path=${encodeURIComponent(m.posterUrl)}`}
+                              alt=""
+                              className="w-8 h-11 object-cover rounded shrink-0"
+                            />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{m.title}</p>
+                            {m.year && <p className="text-xs text-muted-foreground">{m.year}</p>}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Žiadne zhody. Klipy budú uložené ako nový film.
+                    </p>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           <div className="space-y-3">
             {segments.map((segment, i) => (

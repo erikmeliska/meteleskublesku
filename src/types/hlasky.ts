@@ -89,6 +89,7 @@ export type FlowStep =
   | "search"       // Find YouTube video
   | "analyze"      // Downloading subtitles + Gemini analysis
   | "quotes"       // Browse & select quotes
+  | "manual"       // Manual clip adding (no subtitles)
   | "editor"       // Fine-tune a single quote
   | "review"       // Review all marked segments
   | "extracting"   // Batch extraction in progress

@@ -1,16 +1,13 @@
+export const dynamic = "force-dynamic";
+
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
   Film,
-  Plus,
   Headphones,
   Share2,
-  Play,
   Clock,
-  Trash2,
-  ExternalLink,
-  Copy,
   Scissors,
 } from "lucide-react";
 import { auth } from "@/lib/auth";
@@ -19,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatSecondsToTime } from "@/lib/utils";
+import { DeleteClipButton } from "@/components/delete-clip-button";
 
 export const metadata: Metadata = {
   title: "Dashboard",
@@ -30,14 +28,32 @@ export default async function DashboardPage() {
     redirect("/auth/signin");
   }
 
-  const clips = await prisma.userClip.findMany({
-    where: { userId: session.user.id },
-    orderBy: { createdAt: "desc" },
-  });
+  const [clips, movies] = await Promise.all([
+    prisma.userClip.findMany({
+      where: { userId: session.user.id },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.userMovie.findMany({
+      where: { userId: session.user.id },
+      orderBy: { updatedAt: "desc" },
+    }),
+  ]);
+
+  // Count clips per movie + build title map
+  const clipsPerMovie = new Map<string, number>();
+  const movieTitleMap = new Map<string, string>();
+  for (const m of movies) {
+    movieTitleMap.set(m.id, m.title);
+  }
+  for (const clip of clips) {
+    if (clip.movieId) {
+      clipsPerMovie.set(clip.movieId, (clipsPerMovie.get(clip.movieId) || 0) + 1);
+    }
+  }
 
   const totalClips = clips.length;
   const publicClips = clips.filter((c) => c.isPublic).length;
-  const uniqueFilms = new Set(clips.map((c) => c.filmTitle).filter(Boolean)).size;
+  const uniqueFilms = movies.length || new Set(clips.map((c) => c.filmTitle).filter(Boolean)).size;
 
   return (
     <div className="container py-8 max-w-4xl">
@@ -94,6 +110,61 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
+      {/* My movies */}
+      {movies.length > 0 && (
+        <div className="mb-8 animate-fade-in" style={{ animationDelay: "250ms" }}>
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <Film className="h-5 w-5 text-primary" />
+            Moje filmy
+          </h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+            {movies.map((movie, i) => (
+              <Link
+                key={movie.id}
+                href={`/movie/${movie.id.replace(/^mov_/, "")}`}
+                className="animate-fade-in"
+                style={{ animationDelay: `${300 + i * 50}ms` }}
+              >
+                <Card className="overflow-hidden card-hover group">
+                  <div className="relative aspect-video bg-muted">
+                    {movie.thumbnail || movie.posterUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={
+                          movie.posterUrl
+                            ? movie.posterUrl
+                            : `/api/media/image?path=${encodeURIComponent(movie.thumbnail!)}`
+                        }
+                        alt={movie.title}
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Film className="h-8 w-8 text-muted-foreground/30" />
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                    <div className="absolute bottom-2 left-2 right-2">
+                      <p className="text-white text-sm font-medium line-clamp-2 drop-shadow-lg">
+                        {movie.title}
+                      </p>
+                    </div>
+                    {movie.year && (
+                      <Badge className="absolute top-2 right-2 text-[10px] bg-black/50 text-white border-0">
+                        {movie.year}
+                      </Badge>
+                    )}
+                    <Badge className="absolute top-2 left-2 text-[10px] bg-primary/80 text-white border-0">
+                      {clipsPerMovie.get(movie.id) || 0} hlášok
+                    </Badge>
+                  </div>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Clips list or empty state */}
       {clips.length === 0 ? (
         <Card className="animate-fade-in" style={{ animationDelay: "250ms" }}>
@@ -146,57 +217,58 @@ export default async function DashboardPage() {
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <h3 className="font-medium text-sm truncate">
-                          &ldquo;{clip.quoteText || clip.name}&rdquo;
-                        </h3>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {clip.filmTitle || `Video ${clip.videoId}`}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        {clip.source === "gemini" && (
-                          <Badge variant="secondary" className="text-[10px]">
-                            AI
-                          </Badge>
-                        )}
-                        {clip.shareHash && (
-                          <Badge variant="outline" className="text-[10px]">
-                            <Share2 className="h-2.5 w-2.5 mr-1" />
-                            Zdieľaný
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
+                    <h3 className="font-medium text-sm truncate">
+                      &ldquo;{clip.quoteText || clip.name}&rdquo;
+                    </h3>
+                    {clip.movieId && movieTitleMap.get(clip.movieId) && (
+                      <Link
+                        href={`/movie/${clip.movieId.replace(/^mov_/, "")}/clip/${clip.id.replace(/^clip_/, "")}`}
+                        className="text-xs text-primary hover:underline truncate block mt-0.5"
+                      >
+                        {movieTitleMap.get(clip.movieId)}
+                      </Link>
+                    )}
 
-                    <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1 font-mono">
+                    {/* Timing + action icons */}
+                    <div className="flex items-center justify-between mt-2">
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground font-mono">
                         <Clock className="h-3 w-3" />
                         {formatSecondsToTime(clip.beginTime)} – {formatSecondsToTime(clip.endTime)}
+                        {clip.duration > 0 && <span>({formatSecondsToTime(clip.duration)})</span>}
                       </span>
-                      <span>({formatSecondsToTime(clip.duration)})</span>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex items-center gap-2 mt-3">
-                      <Button variant="outline" size="sm" asChild className="h-7 text-xs">
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        {/* Download/play mp3 */}
                         <a
                           href={`/api/media/audio?path=${encodeURIComponent(clip.audioPath)}`}
                           target="_blank"
+                          className="p-1.5 rounded-md text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-all"
+                          title="Stiahnuť MP3"
                         >
-                          <Play className="h-3 w-3 mr-1" />
-                          Prehrať
+                          <Headphones className="h-3.5 w-3.5" />
                         </a>
-                      </Button>
-                      {clip.shareHash && (
-                        <Button variant="outline" size="sm" asChild className="h-7 text-xs">
-                          <Link href={`/clip/${clip.shareHash}`}>
-                            <ExternalLink className="h-3 w-3 mr-1" />
-                            Odkaz
+                        {/* Movie link */}
+                        {clip.movieId && (
+                          <Link
+                            href={`/movie/${clip.movieId.replace(/^mov_/, "")}/clip/${clip.id.replace(/^clip_/, "")}`}
+                            className="p-1.5 rounded-md text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-all"
+                            title="Otvoriť vo filme"
+                          >
+                            <Film className="h-3.5 w-3.5" />
                           </Link>
-                        </Button>
-                      )}
+                        )}
+                        {/* Share link */}
+                        {clip.shareHash && (
+                          <Link
+                            href={`/clip/${clip.shareHash}`}
+                            className="p-1.5 rounded-md text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-all"
+                            title="Zdieľací odkaz"
+                          >
+                            <Share2 className="h-3.5 w-3.5" />
+                          </Link>
+                        )}
+                        {/* Delete */}
+                        <DeleteClipButton clipId={clip.id} />
+                      </div>
                     </div>
                   </div>
                 </div>

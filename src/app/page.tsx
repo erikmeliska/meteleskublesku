@@ -1,19 +1,55 @@
 export const dynamic = "force-dynamic";
 
-import { getMovieListWithAudio } from "@/lib/scraper";
 import { MovieSearch } from "@/components/movie-search";
 import { Film } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import type { MovieListItem } from "@/types/movie";
 
 export default async function HomePage() {
-  const movies = await getMovieListWithAudio();
-  const sorted = [...movies].sort((a, b) => a.title.localeCompare(b.title));
+  const session = await auth();
+
+  // All movies from DB
+  const allDbMovies = await prisma.userMovie.findMany({
+    orderBy: { title: "asc" },
+    select: {
+      id: true,
+      userId: true,
+      title: true,
+      year: true,
+      thumbnail: true,
+      posterUrl: true,
+    },
+  });
+
+  // Fetch audio track names for search
+  const allClips = await prisma.userClip.findMany({
+    where: { movieId: { in: allDbMovies.map((m) => m.id) } },
+    select: { id: true, movieId: true, quoteText: true },
+  });
+
+  const tracksByMovie = new Map<string, { id: string; text: string }[]>();
+  for (const clip of allClips) {
+    if (!clip.movieId) continue;
+    const tracks = tracksByMovie.get(clip.movieId) || [];
+    if (clip.quoteText) tracks.push({ id: clip.id, text: clip.quoteText });
+    tracksByMovie.set(clip.movieId, tracks);
+  }
+
+  const movies: MovieListItem[] = allDbMovies.map((m) => ({
+    id: m.id,
+    title: m.year ? `${m.title} (${m.year})` : m.title,
+    image: m.posterUrl || m.thumbnail,
+    desc: [],
+    audioTracks: tracksByMovie.get(m.id) || [],
+    isMine: session?.user?.id ? m.userId === session.user.id : false,
+  }));
 
   return (
     <div>
       {/* Hero section */}
       <section className="relative gradient-hero overflow-hidden">
-        {/* Decorative elements */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute -top-20 -right-20 w-80 h-80 rounded-full bg-primary/5 blur-3xl" />
           <div className="absolute -bottom-20 -left-20 w-60 h-60 rounded-full bg-primary/5 blur-3xl" />
@@ -34,7 +70,7 @@ export default async function HomePage() {
             <div className="flex items-center justify-center gap-3 mt-6">
               <Badge variant="secondary" className="px-3 py-1 text-sm">
                 <Film className="h-3.5 w-3.5 mr-1.5" />
-                {sorted.length} filmov
+                {movies.length} filmov
               </Badge>
             </div>
           </div>
@@ -43,7 +79,7 @@ export default async function HomePage() {
 
       {/* Movie grid section */}
       <section className="container py-8 md:py-12">
-        <MovieSearch movies={sorted} />
+        <MovieSearch movies={movies} />
       </section>
     </div>
   );
