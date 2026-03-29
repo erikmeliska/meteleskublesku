@@ -53,12 +53,10 @@ export function isCookieError(error: unknown): boolean {
   return (
     msg.includes("Sign in to confirm") ||
     msg.includes("sign in") ||
-    msg.includes("cookies") ||
+    msg.includes("Use --cookies-from-browser or --cookies") ||
     msg.includes("Login Required") ||
-    msg.includes("This video is not available") ||
     msg.includes("Private video") ||
     msg.includes("HTTP Error 403") ||
-    msg.includes("unable to extract") ||
-    msg.includes("bot")
+    msg.includes("confirm you're not a bot")
   );
 }
