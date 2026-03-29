@@ -1,0 +1,3 @@
+-- Baseline migration: initial schema (already applied to existing databases)
+-- This migration is marked as applied and will not run on existing databases.
+-- It exists only to establish the migration history baseline.

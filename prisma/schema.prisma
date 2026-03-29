@@ -17,6 +17,7 @@ model User {
   image         String?
   password      String?
   role          String    @default("user")
+  ytCookies     String?   // Netscape cookies.txt content for yt-dlp
   accounts      Account[]
   sessions      Session[]
   clips         UserClip[]

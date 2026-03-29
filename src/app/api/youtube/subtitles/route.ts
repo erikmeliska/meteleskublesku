@@ -4,13 +4,10 @@ import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { parseVTT } from "@/lib/gemini";
+import { getYtDlpPath, withCookies, isCookieError } from "@/lib/ytdlp";
 
 const execFileAsync = promisify(execFile);
 const CACHE_DIR = path.resolve(process.cwd(), ".cache/temp");
-
-function getYtDlpPath(): string {
-  return process.env.YT_DLP_PATH || "yt-dlp";
-}
 
 function extractVideoId(url: string): string | null {
   const match = url.match(
@@ -45,12 +42,13 @@ export async function POST(request: NextRequest) {
     const ytdlp = getYtDlpPath();
 
     // Step 1: Get video info
-    const { stdout: infoJson } = await execFileAsync(ytdlp, [
+    const infoArgs = await withCookies([
       "--dump-single-json",
       "--no-download",
       "--no-warnings",
       url,
     ]);
+    const { stdout: infoJson } = await execFileAsync(ytdlp, infoArgs);
     const info = JSON.parse(infoJson);
 
     const videoInfo = {
@@ -86,21 +84,21 @@ export async function POST(request: NextRequest) {
     }
 
     // Download subtitles
-    const subArgs = [
+    const subArgs = await withCookies([
       hasManualSubs ? "--write-sub" : "--write-auto-sub",
       "--sub-lang", "sk,cs,cs-CZ,sk-SK",
       "--sub-format", "vtt",
       "--skip-download",
       "-o", path.join(videoDir, "%(id)s"),
       url,
-    ];
+    ]);
 
     try {
       await execFileAsync(ytdlp, subArgs);
     } catch {
       // Try with auto-subs if manual failed
       if (hasManualSubs && hasAutoSubs) {
-        await execFileAsync(ytdlp, [
+        const fallbackArgs = await withCookies([
           "--write-auto-sub",
           "--sub-lang", "sk,cs,cs-CZ,sk-SK",
           "--sub-format", "vtt",
@@ -108,6 +106,7 @@ export async function POST(request: NextRequest) {
           "-o", path.join(videoDir, "%(id)s"),
           url,
         ]);
+        await execFileAsync(ytdlp, fallbackArgs);
       }
     }
 
@@ -133,6 +132,18 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("Subtitles error:", error);
+
+    if (isCookieError(error)) {
+      return NextResponse.json(
+        {
+          error: "YouTube vyžaduje prihlásenie",
+          needsCookies: true,
+          details: "Pre sťahovanie tohto videa sú potrebné YouTube cookies. Nastavte ich v Nastaveniach.",
+        },
+        { status: 403 }
+      );
+    }
+
     return NextResponse.json(
       { error: "Failed to download subtitles", details: String(error) },
       { status: 500 }

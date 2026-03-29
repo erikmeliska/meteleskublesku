@@ -37,6 +37,21 @@ ssh "$HOST" << 'ENDSSH'
   mkdir -p data cache
   sudo chown -R 1001:1001 data cache
 
+  # Run pending migrations
+  for migration in prisma/migrations/*/migration.sql; do
+    name=$(basename $(dirname "$migration"))
+    # Check if already applied by looking for marker file
+    if [ ! -f "data/.migration_${name}" ]; then
+      echo "==> Running migration: $name"
+      docker run --rm -v "$(pwd)/data:/data" -v "$(pwd)/prisma:/prisma" \
+        --entrypoint "" node:24-slim \
+        sh -c "apt-get update -qq && apt-get install -y -qq sqlite3 > /dev/null 2>&1 && sqlite3 /data/meteleskublesku.db < /prisma/migrations/${name}/migration.sql" \
+        && touch "data/.migration_${name}" \
+        && echo "==> Migration $name applied" \
+        || echo "==> Migration $name skipped (may already be applied)"
+    fi
+  done
+
   # Build and deploy
   docker compose down
   docker compose build --no-cache

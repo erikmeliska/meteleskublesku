@@ -4,13 +4,10 @@ import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import ffmpeg from "fluent-ffmpeg";
+import { getYtDlpPath, withCookies, isCookieError } from "@/lib/ytdlp";
 
 const execFileAsync = promisify(execFile);
 const CACHE_DIR = path.resolve(process.cwd(), ".cache/temp");
-
-function getYtDlpPath(): string {
-  return process.env.YT_DLP_PATH || "yt-dlp";
-}
 
 function ffmpegExtract(
   input: string,
@@ -93,12 +90,13 @@ export async function POST(request: NextRequest) {
       }
 
       const ytdlp = getYtDlpPath();
-      await execFileAsync(ytdlp, [
+      const dlArgs = await withCookies([
         "-f", "bestvideo[height<=720]+bestaudio/best[height<=720]",
         "--merge-output-format", "mp4",
         "-o", videoPath,
         videoUrl,
       ]);
+      await execFileAsync(ytdlp, dlArgs);
     }
 
     // Step 2: Extract each segment
@@ -194,6 +192,18 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("Batch extraction error:", error);
+
+    if (isCookieError(error)) {
+      return NextResponse.json(
+        {
+          error: "YouTube vyžaduje prihlásenie",
+          needsCookies: true,
+          details: "Pre sťahovanie tohto videa sú potrebné YouTube cookies. Nastavte ich v Nastaveniach.",
+        },
+        { status: 403 }
+      );
+    }
+
     return NextResponse.json(
       { error: "Batch extraction failed", details: String(error) },
       { status: 500 }

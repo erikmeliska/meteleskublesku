@@ -5,13 +5,10 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import ffmpeg from "fluent-ffmpeg";
 import { parseTimeToSeconds } from "@/lib/utils";
+import { getYtDlpPath, withCookies, isCookieError } from "@/lib/ytdlp";
 
 const execFileAsync = promisify(execFile);
 const CACHE_DIR = path.resolve(process.cwd(), ".cache/temp");
-
-function getYtDlpPath(): string {
-  return process.env.YT_DLP_PATH || "yt-dlp";
-}
 
 function extractVideoId(url: string): string | null {
   const match = url.match(
@@ -80,12 +77,13 @@ export async function POST(request: NextRequest) {
     // Get video info if no time range specified
     if (!start && !end) {
       const ytdlp = getYtDlpPath();
-      const { stdout } = await execFileAsync(ytdlp, [
+      const infoArgs = await withCookies([
         "--dump-single-json",
         "--no-download",
         "--no-warnings",
         url,
       ]);
+      const { stdout } = await execFileAsync(ytdlp, infoArgs);
       const info = JSON.parse(stdout);
       return NextResponse.json({
         info: {
@@ -115,7 +113,7 @@ export async function POST(request: NextRequest) {
     const videoPath = path.join(videoDir, "video.mp4");
     if (!fs.existsSync(videoPath)) {
       const ytdlp = getYtDlpPath();
-      await execFileAsync(ytdlp, [
+      const dlArgs = await withCookies([
         "-f",
         `bestvideo[height<=${resolution}]+bestaudio/best[height<=${resolution}]`,
         "--merge-output-format",
@@ -124,6 +122,7 @@ export async function POST(request: NextRequest) {
         videoPath,
         url,
       ]);
+      await execFileAsync(ytdlp, dlArgs);
     }
 
     // Download subtitles if not cached
@@ -131,7 +130,7 @@ export async function POST(request: NextRequest) {
     if (!fs.existsSync(subtitlePath)) {
       try {
         const ytdlp = getYtDlpPath();
-        await execFileAsync(ytdlp, [
+        const subArgs = await withCookies([
           "--write-auto-sub",
           "--write-sub",
           "--sub-lang",
@@ -143,6 +142,7 @@ export async function POST(request: NextRequest) {
           path.join(videoDir, "%(id)s"),
           url,
         ]);
+        await execFileAsync(ytdlp, subArgs);
       } catch {
         // Subtitles not available, continue without them
       }
@@ -261,6 +261,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ metadata, sample });
   } catch (error) {
     console.error("Extraction error:", error);
+
+    if (isCookieError(error)) {
+      return NextResponse.json(
+        {
+          error: "YouTube vyžaduje prihlásenie",
+          needsCookies: true,
+          details: "Pre sťahovanie tohto videa sú potrebné YouTube cookies. Nastavte ich v Nastaveniach.",
+        },
+        { status: 403 }
+      );
+    }
+
     return NextResponse.json(
       { error: "Extraction failed", details: String(error) },
       { status: 500 }
