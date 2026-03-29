@@ -10,8 +10,8 @@ RUN apt-get update && \
 # ---- Dependencies ----
 FROM base AS deps
 WORKDIR /app
-COPY package.json yarn.lock ./
-RUN corepack enable && yarn install --frozen-lockfile
+COPY package.json package-lock.json ./
+RUN npm ci
 
 # ---- Builder ----
 FROM base AS builder
@@ -46,7 +46,7 @@ COPY --from=builder /app/src/generated ./src/generated
 COPY --from=builder /app/prisma ./prisma
 
 # Create directories with correct permissions
-RUN mkdir -p data .cache && chown -R nextjs:nodejs data .cache
+RUN mkdir -p data .cache .next/cache && chown -R nextjs:nodejs data .cache .next/cache
 
 USER nextjs
 
