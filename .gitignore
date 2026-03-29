@@ -47,6 +47,7 @@ yarn-error.log*
 *.png
 
 # docs
+DOCUMENTATION.md
 # PLAN.md
 
 # vercel
