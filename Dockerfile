@@ -1,46 +1,55 @@
-# Install dependencies only when needed
-FROM node:16 AS deps
-# RUN apk add --no-cache libc6-compat
-RUN apt-get -y update
-RUN apt-get -y upgrade
-RUN apt-get install -y ffmpeg
+# ---- Base ----
+FROM node:24-slim AS base
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ffmpeg curl ca-certificates && \
+    curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
+      -o /usr/local/bin/yt-dlp && \
+    chmod a+rx /usr/local/bin/yt-dlp && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# ---- Dependencies ----
+FROM base AS deps
 WORKDIR /app
-COPY package.json yarn.lock ./
-RUN yarn install --frozen-lockfile
+COPY package.json package-lock.json* ./
+RUN npm ci
 
-# Rebuild the source code only when needed
-FROM node:16 AS builder
-
+# ---- Builder ----
+FROM base AS builder
 WORKDIR /app
-
 COPY --from=deps /app/node_modules ./node_modules
-
 COPY . .
 
-RUN yarn build
+# Generate Prisma client
+RUN npx prisma generate
 
-# Production image, copy all the files and run next
-FROM node:16 AS runner
+# Build Next.js
+RUN npm run build
+
+# ---- Runner ----
+FROM base AS runner
 WORKDIR /app
 
-ENV NODE_ENV production
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
 
-# RUN addgroup --system --gid 1001 meteleskublesku
-# RUN adduser --system --uid 1001 meteleskublesku
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
 
+# Copy standalone build
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
 
-# Automatically leverage output traces to reduce image size
-# https://nextjs.org/docs/advanced-features/output-file-tracing
-# COPY --from=builder --chown=meteleskublesku:meteleskublesku /app/.next/standalone ./
-# COPY --from=builder --chown=meteleskublesku:meteleskublesku /app/.next/static ./.next/static
+# Copy Prisma generated client + schema
+COPY --from=builder /app/src/generated ./src/generated
+COPY --from=builder /app/prisma ./prisma
 
-# USER meteleskublesku
+# Create directories with correct permissions
+RUN mkdir -p data .cache && chown -R nextjs:nodejs data .cache
+
+USER nextjs
 
 EXPOSE 3000
 
-ENV PORT 3000
-
-CMD ["yarn", "run", "start"]
+CMD ["node", "server.js"]

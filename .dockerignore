@@ -1,4 +1,9 @@
 node_modules
-.cache
 .next
-.dccache
+.cache
+data
+.git
+.gitignore
+*.md
+.env*.local
+.DS_Store

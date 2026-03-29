@@ -1,0 +1,146 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// === Auth.js tables ===
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  role          String    @default("user")
+  accounts      Account[]
+  sessions      Session[]
+  clips         UserClip[]
+  createdAt     DateTime  @default(now())
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// === Application tables ===
+
+model UserClip {
+  id          String   @id // clip_xxxxx format
+  userId      String
+  movieId     String?
+  videoId     String
+  name        String
+  filmTitle   String   @default("")
+  quoteText   String   @default("")
+  audioPath   String
+  beginTime   Float
+  endTime     Float
+  duration    Float
+  imageBegin  String?
+  imageMiddle String?
+  imageEnd    String?
+  subtitles   String?
+  isPublic    Boolean  @default(false)
+  isGlobal    Boolean  @default(false)
+  shareHash   String?  @unique
+  source      String   @default("manual") // manual | gemini
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([movieId])
+  @@index([isPublic])
+  @@index([shareHash])
+}
+
+// User's own movies (from extracted clips)
+model UserMovie {
+  id          String   @id // mov_xxxxx format
+  userId      String
+  videoId     String
+  title       String
+  year        Int?
+  director    String?
+  screenplay  String?
+  music       String?
+  cast        String?
+  plot        String?
+  thumbnail   String?
+  images      String?  // JSON array of {thumbnail, url}
+  posterUrl   String?  // CSFD/external poster URL
+  csfdId      Int?     // CSFD movie ID for linking
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, videoId])
+  @@index([userId])
+}
+
+// Video history – remembers videos the user already analyzed
+model VideoHistory {
+  id             String   @id @default(cuid())
+  userId         String
+  videoId        String
+  videoTitle     String
+  videoUrl       String
+  thumbnail      String   @default("")
+  duration       String   @default("")
+  author         String   @default("")
+  subtitleCues   String?  // JSON array of SubtitleCue (cached)
+  quotes         String?  // JSON array of GeminiQuote (cached)
+  lastStep       String   @default("subtitles") // subtitles | quotes
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([userId, videoId])
+  @@index([userId])
+}
+
+// Temporary storage for extraction drafts (before saving)
+model ExtractionDraft {
+  id          String   @id @default(cuid())
+  userId      String
+  videoId     String
+  videoTitle  String
+  segments    String   // JSON array of ExtractionSegment
+  status      String   @default("pending") // pending | running | done | error
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+}

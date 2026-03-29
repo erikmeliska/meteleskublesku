@@ -1,10 +1,26 @@
 services:
-  server:
+  meteleskublesku:
     container_name: meteleskublesku
-    build:
-      context: ./
+    build: .
     ports:
-     - 3700:3000
+      - "3700:3000"
     volumes:
-      - ./:/app
-    restart: unless-stopped      
+      - meteleskublesku-data:/app/data
+      - meteleskublesku-cache:/app/.cache
+    env_file:
+      - .env.production
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  meteleskublesku-data:
+    driver: local
+  meteleskublesku-cache:
+    driver: local

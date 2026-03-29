@@ -1,124 +1,176 @@
-# MeteleskuBlesku Frontend
+# MeteleskuBlesku
 
-Kultová stránka meteleskublesku.cz potrebovala nový design a hlavne potrebovala sfunkčniť. Vznikol tak nový frontend stránky, ktorý je založený na Next.js.
+Kultova stranka meteleskublesku.cz potrebovala novy dizajn a hlavne potrebovala sfunkcnit. Vznikol tak novy frontend stranky, ktory je zalozeny na Next.js. Povodne to bol jednoduchy proxy/cache frontend, ale medzicasom sa z toho stal plnohodnotny system na spravu filmovych hlasky s AI extrakciou z YouTube.
 
 ## Project Description
 
-This project is a modernized frontend for the website meteleskublesku.cz. Its primary purpose is to provide a faster, more reliable, and user-friendly experience for accessing the site's content.
+A full-stack web application for browsing, extracting, and managing iconic Czech/Slovak movie quotes. Originally a caching proxy for meteleskublesku.cz, it has evolved into a standalone platform with AI-powered audio clip extraction from YouTube videos.
 
-Key features include:
-- **Caching:** The application caches images and audio files locally to reduce the load on the original server and improve loading times.
-- **YouTube Audio Extraction:** The frontend can extract and play audio directly from YouTube links, even if the original audio source is unavailable.
-- **Modern Interface:** Built with Next.js, the frontend offers a responsive and interactive user experience.
+Key features:
+
+- **Movie browsing** -- Search, filter, and browse films with audio player and image gallery
+- **AI quote extraction** -- Paste a YouTube URL, fetch subtitles, let Google Gemini identify the best quotes, then extract audio clips with timestamps
+- **Clip management** -- User dashboard for managing clips, sharing via unique hash links (public/private)
+- **CSFD integration** -- Fetch film metadata (poster, cast, director, plot) from the Czech-Slovak Film Database
+- **Authentication** -- GitHub OAuth and email/password credentials via NextAuth 5
+- **Legacy scraper** -- Import content from the original meteleskublesku.cz website
+- **Admin tools** -- Import legacy data, batch update images and durations
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Framework | Next.js 16 (App Router, Turbopack, Server Components) |
+| UI | React 19, TypeScript 5.8 (strict) |
+| Styling | Tailwind CSS 4, shadcn/ui (Radix primitives), Lucide icons |
+| Database | SQLite + Prisma 7.5 (`@prisma/adapter-better-sqlite3`) |
+| Auth | NextAuth 5 (JWT, GitHub OAuth + email/password) |
+| AI | Google Gemini (`@google/genai`) for quote extraction from YouTube subtitles |
+| Media | yt-dlp (`youtube-dl-exec`), fluent-ffmpeg, sharp |
+| Film data | node-csfd-api for Czech-Slovak Film Database |
+| Deployment | Docker + docker-compose |
 
 ## Project Structure
 
-The project is organized into the following main directories:
-
-- **`pages/api`**: Contains the backend API endpoints for various functionalities like fetching movie data, images, and audio.
-- **`pages/movie`**: Contains the dynamic pages for displaying individual movie details.
-- **`pages`**: Contains other frontend pages, including the main movie listing page.
-- **`public`**: Stores static assets like images and fonts.
-- **`.cache`**: This directory is used for caching images and audio files downloaded from the original server or extracted from YouTube.
+```
+src/
+  app/                    # App Router pages & layouts
+    api/                  # 19 API route handlers
+      admin/              #   import-legacy, update-images, update-durations
+      auth/               #   [...nextauth], signup
+      clips/              #   CRUD for user clips
+      csfd/               #   CSFD film metadata lookup
+      history/            #   video analysis history
+      media/              #   audio & image proxy/cache
+      movies/             #   movie list, detail, search
+      youtube/            #   search, subtitles, analyze, extract, batch-extract
+    movie/[id]/           # Movie detail page
+    add/                  # Add new quote flow
+    dashboard/            # User clip dashboard
+    list/                 # Movie listing
+    clip/                 # Shared clip view
+    auth/                 # Sign-in / sign-up pages
+  components/             # UI components (shadcn/ui + custom)
+    ui/                   #   shadcn/ui primitives
+    audio-player.tsx      #   Audio playback
+    extraction-wizard.tsx #   Multi-step quote extraction
+    movie-card.tsx        #   Movie grid card
+    movie-search.tsx      #   Search & filter bar
+    image-gallery.tsx     #   Image lightbox
+    ...
+  lib/                    # Core logic
+    auth.ts               #   NextAuth configuration
+    cache.ts              #   File-based media cache
+    gemini.ts             #   Google Gemini AI client
+    prisma.ts             #   Prisma client singleton
+    scraper.ts            #   Legacy site scraper
+    utils.ts              #   Shared utilities
+  types/                  # TypeScript type definitions
+  generated/prisma/       # Generated Prisma client
+prisma/
+  schema.prisma           # 8 models: User, Account, Session, VerificationToken,
+                          #   UserClip, UserMovie, VideoHistory, ExtractionDraft
+data/                     # SQLite database file
+public/                   # Static assets
+```
 
 ## API Endpoints
 
-The API endpoints are located in the `pages/api/` directory. Here's a list of the available endpoints:
+### Movies
+- `GET /api/movies` -- List all movies
+- `GET /api/movies/[id]` -- Movie detail by ID
+- `GET /api/movies/search` -- Search movies
 
-- **`GET /api/image/[...params]`**:
-    - **Function**: Fetches and returns an image. It first tries to serve the image from the local cache. If not found, it downloads the image from the original server, caches it, and then returns it.
-    - **Request Parameters**: `params` (Array): An array of URL parts forming the path to the image on the original server.
-    - **Response**: The image file.
+### YouTube / Extraction
+- `GET /api/youtube/search` -- Search YouTube videos
+- `POST /api/youtube/subtitles` -- Fetch subtitles for a video
+- `POST /api/youtube/analyze` -- AI analysis of subtitles (Gemini)
+- `POST /api/youtube/extract` -- Extract a single audio clip
+- `POST /api/youtube/batch-extract` -- Extract multiple clips at once
 
-- **`GET /api/audio/[...params]`**:
-    - **Function**: Fetches and returns an audio file. It attempts to serve the audio from the local cache. If not found, it downloads the audio from the original server, caches it, and returns it. If the original audio is unavailable and a YouTube link is provided in the movie data, it extracts the audio from YouTube, caches it, and returns it.
-    - **Request Parameters**: `params` (Array): An array of URL parts forming the path to the audio file or a YouTube video ID prefixed with `yt_`.
-    - **Response**: The audio file.
+### Clips
+- `GET/POST/DELETE /api/clips` -- CRUD for user clips
 
-- **`GET /api/movies`**:
-    - **Function**: Fetches and returns a list of all movies.
-    - **Request Parameters**: None.
-    - **Response**: A JSON array of movie objects.
+### Media
+- `GET /api/media/audio` -- Serve/cache audio files
+- `GET /api/media/image` -- Serve/cache image files
 
-- **`GET /api/movie/[id]`**:
-    - **Function**: Fetches and returns the details of a specific movie by its ID.
-    - **Request Parameters**: `id` (String): The ID of the movie.
-    - **Response**: A JSON object containing the movie details.
+### Auth
+- `GET/POST /api/auth/[...nextauth]` -- NextAuth handlers
+- `POST /api/auth/signup` -- Email/password registration
 
-- **`POST /api/add`**: (Implied - for adding new movies)
-    - **Function**: Allows adding a new movie to the database. (Further details to be specified based on implementation).
-    - **Request Parameters**: (To be specified based on implementation - likely movie title, year, description, image/audio URLs, etc.)
-    - **Response**: (To be specified based on implementation - likely a success/failure message and the ID of the newly added movie).
-
-## Frontend Pages
-
-- **`pages/index.js`**:
-    - **Description**: This is the main page of the application. It displays a list of movies and provides options for filtering and searching through the movie collection.
-    - **Features**:
-        - Movie listing
-        - Filtering by various criteria (e.g., year, genre - if available)
-        - Search functionality
-
-- **`pages/movie/[...params].js`**:
-    - **Description**: This page displays the detailed information for a specific movie. The `params` in the URL typically represent the movie's ID.
-    - **Features**:
-        - Movie title, year, description, and other metadata.
-        - Embedded audio player for listening to the movie's soundtrack or dialogue.
-        - Image gallery (if multiple images are associated with the movie).
-
-- **Implied "Add Movie" Page**:
-    - While not explicitly a file in the `pages` directory (it might be part of `pages/index.js` or a separate modal/route), the functionality to add new movies is planned. This would involve a form to input movie details and submit them to the `/api/add` endpoint.
+### Other
+- `GET /api/csfd` -- CSFD film metadata lookup
+- `GET/POST /api/history` -- Video analysis history
+- `GET /api/history/[videoId]` -- History for a specific video
+- `POST /api/admin/import-legacy` -- Import legacy site data
+- `POST /api/admin/update-images` -- Batch update movie images
+- `POST /api/admin/update-durations` -- Batch update clip durations
 
 ## Setup Instructions
 
-1.  **Clone the repository:**
-    ```bash
-    git clone <repository_url>
-    cd <repository_directory>
-    ```
+1. **Clone the repository:**
+   ```bash
+   git clone <repository_url>
+   cd meteleskublesku
+   ```
 
-2.  **Install dependencies:**
-    ```bash
-    yarn install
-    ```
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
 
-3.  **Environment Variables:**
-    The project uses environment variables for configuration. A template file `.env.example` is provided. Create a `.env` file in the root of the project by copying the example:
-    ```bash
-    cp .env.example .env
-    ```
-    Then, update the variables in `.env` with your specific configuration. Key variables include:
-    - `METELESKUBLESKU_URL`: The base URL of the original meteleskublesku.cz site.
-    - `INTERNAL_API_URL`: The URL of this application's backend API (e.g., `http://localhost:3000/api` for local development).
-    - `MONGODB_URI`: The connection string for the MongoDB database.
+3. **Environment variables:**
+   ```bash
+   cp .env.example .env
+   ```
+   Edit `.env` and fill in the required values:
+
+   | Variable | Description |
+   |----------|-------------|
+   | `NEXT_PUBLIC_OLD_URL` | Base URL of the original meteleskublesku.cz site |
+   | `NEXT_PUBLIC_GA_MEASUREMENT_ID` | Google Analytics measurement ID |
+   | `DATABASE_URL` | SQLite database path (e.g. `file:./data/meteleskublesku.db`) |
+   | `AUTH_SECRET` | NextAuth secret -- generate with `openssl rand -base64 32` |
+   | `AUTH_GITHUB_ID` | GitHub OAuth app client ID |
+   | `AUTH_GITHUB_SECRET` | GitHub OAuth app client secret |
+   | `AUTH_TRUST_HOST` | Set to `true` for non-Vercel deployments |
+   | `GEMINI_API_KEY` | Google Gemini API key (required for AI quote extraction) |
+
+4. **Set up the database:**
+   ```bash
+   npm run db:generate
+   npm run db:push
+   ```
+
+5. **External dependencies:**
+   - `yt-dlp` must be installed on the system for YouTube audio extraction
+   - `ffmpeg` must be installed for audio processing
 
 ## Running Locally
 
-To run the application in development mode:
+```bash
+npm run dev
+```
+
+Starts the Next.js dev server with Turbopack on `http://localhost:3781`.
+
+## Available Scripts
+
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | Development server (Turbopack, port 3781) |
+| `npm run build` | Production build |
+| `npm run start` | Start production server |
+| `npm run lint` | ESLint |
+| `npm run db:generate` | Generate Prisma client |
+| `npm run db:push` | Push schema to database |
+| `npm run db:studio` | Open Prisma Studio |
+
+## Docker Deployment
 
 ```bash
-yarn dev
+docker-compose up --build
 ```
-This will start the Next.js development server, typically on `http://localhost:3000`.
 
-## Building and Running with Docker
-
-The project includes a `Dockerfile` and `docker-compose.yml` for containerized deployment.
-
-1.  **Build and run the Docker container:**
-    ```bash
-    docker-compose up --build
-    ```
-    This command will build the Docker image (if it doesn't exist or if changes are detected) and start the container. The application will be accessible, usually on `http://localhost:3000` (or as configured in `docker-compose.yml`).
-
--   **`Dockerfile`**: Defines the environment and steps to build the Next.js application image.
--   **`start.sh`**: A script used within the Docker container to start the Next.js application.
-
-## Running Tests
-
-(This section will be updated once tests are implemented.)
-
-```bash
-# Placeholder for test execution commands
-# e.g., yarn test
-```
+The `Dockerfile` and `docker-compose.yml` handle the full build and deployment. Make sure your `.env` file is configured before building.
