@@ -2,8 +2,6 @@ services:
   meteleskublesku:
     container_name: meteleskublesku
     build: .
-    ports:
-      - "3700:3000"
     volumes:
       - meteleskublesku-data:/app/data
       - meteleskublesku-cache:/app/.cache
@@ -11,6 +9,8 @@ services:
       - .env.production
     environment:
       - NODE_ENV=production
+    networks:
+      - caddy-net
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000"]
@@ -24,3 +24,7 @@ volumes:
     driver: local
   meteleskublesku-cache:
     driver: local
+
+networks:
+  caddy-net:
+    external: true
