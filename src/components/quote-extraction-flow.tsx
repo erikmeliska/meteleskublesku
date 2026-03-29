@@ -378,6 +378,9 @@ export function QuoteExtractionFlow() {
       const subsData = await subsRes.json();
 
       if (subsData.error) {
+        if (subsData.needsCookies) {
+          throw new Error("YouTube vyžaduje prihlásenie. Nastavte YouTube cookies v Nastaveniach (/settings).");
+        }
         throw new Error(subsData.error);
       }
 
@@ -558,6 +561,9 @@ export function QuoteExtractionFlow() {
       const data = await res.json();
 
       if (data.error) {
+        if (data.needsCookies) {
+          throw new Error("YouTube vyžaduje prihlásenie. Nastavte YouTube cookies v Nastaveniach (/settings).");
+        }
         throw new Error(data.error);
       }
 
@@ -1122,9 +1128,16 @@ export function QuoteExtractionFlow() {
                   </div>
 
                   {/* Add button */}
+                  {manualEnd - manualStart > 300 && (
+                    <p className="text-xs text-destructive flex items-center gap-1.5">
+                      <AlertCircle className="h-3.5 w-3.5" />
+                      Maximálna dĺžka klipu je 5 minút ({formatSecondsToTime(300)})
+                    </p>
+                  )}
                   <Button
                     onClick={() => {
                       if (manualEnd <= manualStart) return;
+                      if (manualEnd - manualStart > 300) return;
                       setSegments((prev) => [
                         ...prev,
                         {
@@ -1142,7 +1155,7 @@ export function QuoteExtractionFlow() {
                       setManualText("");
                       manualPlayerRef.current?.seekTo(manualEnd);
                     }}
-                    disabled={manualEnd <= manualStart}
+                    disabled={manualEnd <= manualStart || manualEnd - manualStart > 300}
                     className="w-full gradient-primary text-white"
                   >
                     <Plus className="h-4 w-4 mr-1.5" />
@@ -1284,15 +1297,23 @@ export function QuoteExtractionFlow() {
                 {segments.length} {segments.length === 1 ? "segment" : segments.length < 5 ? "segmenty" : "segmentov"} na extrakciu
               </p>
             </div>
-            <Button
-              onClick={handleBatchExtract}
-              disabled={segments.length === 0}
-              className="gradient-primary text-white"
-              size="lg"
-            >
-              <Scissors className="h-4 w-4 mr-2" />
-              Extrahovať všetky
-            </Button>
+            <div className="text-right">
+              {segments.some((s) => s.endTime - s.startTime > 300) && (
+                <p className="text-xs text-destructive mb-2 flex items-center justify-end gap-1.5">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  Niektoré klipy prekračujú max 5 minút
+                </p>
+              )}
+              <Button
+                onClick={handleBatchExtract}
+                disabled={segments.length === 0 || segments.some((s) => s.endTime - s.startTime > 300)}
+                className="gradient-primary text-white"
+                size="lg"
+              >
+                <Scissors className="h-4 w-4 mr-2" />
+                Extrahovať všetky
+              </Button>
+            </div>
           </div>
 
           {/* Movie assignment */}
@@ -1392,8 +1413,9 @@ export function QuoteExtractionFlow() {
                       <span className="font-mono">
                         {formatSecondsToTime(segment.startTime)} – {formatSecondsToTime(segment.endTime)}
                       </span>
-                      <span>
+                      <span className={segment.endTime - segment.startTime > 300 ? "text-destructive font-medium" : ""}>
                         ({formatSecondsToTime(segment.endTime - segment.startTime)})
+                        {segment.endTime - segment.startTime > 300 && " — príliš dlhý!"}
                       </span>
                     </div>
                   </div>
@@ -1496,6 +1518,13 @@ export function QuoteExtractionFlow() {
                       </p>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {formatSecondsToTime(segment.startTime)} – {formatSecondsToTime(segment.endTime)}
+                        {!success && result?.error && (
+                          <span className="text-destructive ml-2">
+                            {result.error === "Invalid time range"
+                              ? "— Klip je príliš dlhý (max 5 minút)"
+                              : `— ${result.error}`}
+                          </span>
+                        )}
                       </p>
                     </div>
                     {success && result?.audioPath && (
